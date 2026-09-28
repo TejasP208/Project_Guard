@@ -717,7 +717,7 @@ async function sendMessage() {
         }
 
     } catch (err) {
-        aiMessage.textContent = "Error connecting to server. Is Ollama running with llama3.2?";
+        aiMessage.textContent = "Error connecting to the AI service. Please try again shortly.";
         console.error(err);
     } finally {
         sendBtn.innerHTML = originalBtnHtml;

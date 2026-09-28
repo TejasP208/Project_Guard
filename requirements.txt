@@ -8,4 +8,6 @@ python-docx
 scipy
 pandas
 python-dotenv
-fastapi unicorn
+groq
+fastapi
+unicorn

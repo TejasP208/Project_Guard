@@ -1,4 +1,21 @@
-import ollama
+import os
+
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
+
+_groq_client = None
+
+
+def _get_groq_client():
+    global _groq_client
+    api_key = os.getenv("API_key")
+    if not api_key:
+        raise RuntimeError("Groq API key is missing. Set GROQ_API_KEY in the environment or .env file.")
+    if _groq_client is None:
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 SYSTEM_PROMPT = """
 You are Axiom AI, an intelligent Project Finder and Academic Assistant for students.
@@ -25,16 +42,18 @@ Give the answer in plain text.
 Do NOT use *, **, markdown, or bullet symbols.
 Keep formatting simple and clean.
 Also consider the past history of the chat.
-do consider the project title and project absract and project ppt 
+do consider the project title and project absract and project ppt
 """
 
 def Chatbot_stream(prompt: str):
-    stream = ollama.chat(
-        model="llama3.2",
+    stream = _get_groq_client().chat.completions.create(
+        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
         messages=[
              {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}],
-        stream=True
+        stream=True,
     )
     for chunk in stream:
-        yield chunk['message']['content']
+        content = chunk.choices[0].delta.content
+        if content:
+            yield content

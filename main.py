@@ -2,7 +2,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from axiom_ai import Chatbot_stream
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, SessionLocal
+from database import engine, SessionLocal, migrate_database
 from models import Base, Project, Team, TeamMember, Student, Mentor
 from passlib.hash import pbkdf2_sha256
 from fastapi import HTTPException
@@ -13,6 +13,7 @@ from nlp.checker import run_plagiarism_check
 
 # Initialize DB
 Base.metadata.create_all(bind=engine)
+migrate_database()
 
 app = FastAPI()
 
