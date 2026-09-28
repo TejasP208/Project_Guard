@@ -7,3 +7,5 @@ PyMuPDF
 python-docx
 scipy
 pandas
+python-dotenv
+fastapi unicorn

@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mentor Portal - Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons for modern, clean icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="mentor_sytle.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="ph ph-graduation-cap"></i>
+                    <span>ProjectGuard</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" id="nav-dashboard">
+                    <i class="ph ph-squares-four"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-project-list">
+                    <i class="ph ph-folder-open"></i>
+                    <span>Project List</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-student-list">
+                    <i class="ph ph-users"></i>
+                    <span>Student List</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-group-connect">
+                    <i class="ph ph-chats-teardrop"></i>
+                    <span>Group Connect</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile" id="user-profile-trigger" style="cursor: pointer;" title="Click to edit profile">
+                    <div class="avatar" id="sidebar-avatar"><i class="ph-fill ph-user"></i></div>
+                    <div class="user-info">
+                        <span class="user-name" id="mentor-display-name">Mentor</span>
+                        <span class="user-role" style="display: flex; align-items: center; gap: 4px;">
+                            Mentor <i class="ph ph-pencil-simple" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                        </span>
+                    </div>
+                </div>
+                <div class="logout-wrapper" style="margin-top: 1rem; border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                    <a href="#" class="nav-item" id="logout-btn">
+                        <i class="ph ph-sign-out"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div>
+                    <h1 class="page-title" id="main-title">Mentor Dashboard</h1>
+                    <p class="page-subtitle" id="main-subtitle">Overview of your assigned student groups</p>
+                </div>
+                <!-- Optional notification icon -->
+                <button class="icon-btn glass-btn">
+                    <i class="ph ph-bell"></i>
+                </button>
+            </header>
+
+            <!-- View: Dashboard -->
+            <div id="view-dashboard" class="content-view">
+                <!-- Dashboard Stats Row -->
+                <div class="mentor-stats-row">
+                    <div class="mentor-stat-card glass-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15)); color: var(--primary);">
+                            <i class="ph ph-users-three"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">12</span>
+                            <span class="stat-label">Assigned Students</span>
+                        </div>
+                    </div>
+                    <div class="mentor-stat-card glass-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(52,211,153,0.15)); color: var(--status-verified);">
+                            <i class="ph ph-folder-open"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">8</span>
+                            <span class="stat-label">Active Projects</span>
+                        </div>
+                    </div>
+                    <div class="mentor-stat-card glass-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,191,36,0.15)); color: var(--status-pending);">
+                            <i class="ph ph-clock-countdown"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">3</span>
+                            <span class="stat-label">Pending Reviews</span>
+                        </div>
+                    </div>
+                    <div class="mentor-stat-card glass-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.15)); color: var(--status-checking);">
+                            <i class="ph ph-calendar-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">5</span>
+                            <span class="stat-label">Reviews Done</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Review Button -->
+                <div class="schedule-review-section">
+                    <button class="btn btn-schedule-review" id="btn-schedule-review" onclick="document.getElementById('review-modal').classList.add('active')">
+                        <i class="ph ph-calendar-plus"></i>
+                        <span>Schedule a Review</span>
+                        <i class="ph ph-arrow-right btn-arrow"></i>
+                    </button>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="glass-card mentor-activity-card">
+                    <h3 class="activity-title"><i class="ph ph-clock-counter-clockwise"></i> Recent Activity</h3>
+                    <div class="activity-list">
+                        <div class="activity-item">
+                            <div class="activity-dot" style="background: var(--status-verified);"></div>
+                            <div class="activity-content">
+                                <span class="activity-text"><strong>Ravi Kumar</strong> submitted project report</span>
+                                <span class="activity-time">2 hours ago</span>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-dot" style="background: var(--status-pending);"></div>
+                            <div class="activity-content">
+                                <span class="activity-text"><strong>Priya Sharma</strong> requested feedback on draft</span>
+                                <span class="activity-time">5 hours ago</span>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-dot" style="background: var(--status-checking);"></div>
+                            <div class="activity-content">
+                                <span class="activity-text"><strong>Group B</strong> review completed</span>
+                                <span class="activity-time">Yesterday</span>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-dot" style="background: var(--primary);"></div>
+                            <div class="activity-content">
+                                <span class="activity-text"><strong>Anika Patel</strong> uploaded plagiarism check</span>
+                                <span class="activity-time">2 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Project List -->
+            <div id="view-project-list" class="content-view hidden">
+                <div class="glass-card mentor-table-card">
+                    <div class="table-header-bar">
+                        <h3><i class="ph ph-folder-open"></i> All Projects</h3>
+                        <div class="table-search">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" placeholder="Search projects..." id="project-search">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="mentor-table">
+                            <thead>
+                                <tr>
+                                    <th>Project Title</th>
+                                    <th>Group</th>
+                                    <th>Students</th>
+                                    <th>Status</th>
+                                    <th>Last Updated</th>
+                                    <th>Action</th>
+                                    <th>AI Assist</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="project-name">AI-Based Plagiarism Detector</td>
+                                    <td>Group A</td>
+                                    <td>Ravi, Priya, Amit</td>
+                                    <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Approved</span></td>
+                                    <td>Apr 7, 2026</td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="project-name">Smart Attendance System</td>
+                                    <td>Group B</td>
+                                    <td>Anika, Rohan, Sneha</td>
+                                    <td><span class="chip checking"><i class="ph-fill ph-hourglass"></i> In Review</span></td>
+                                    <td>Apr 6, 2026</td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="project-name">E-Commerce Platform</td>
+                                    <td>Group C</td>
+                                    <td>Meera, Karan, Dev</td>
+                                    <td><span class="chip pending"><i class="ph-fill ph-clock"></i> Pending</span></td>
+                                    <td>Apr 5, 2026</td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="project-name">Healthcare Chatbot</td>
+                                    <td>Group D</td>
+                                    <td>Pooja, Varun, Nikhil</td>
+                                    <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Approved</span></td>
+                                    <td>Apr 4, 2026</td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="project-name">Budget Tracker App</td>
+                                    <td>Group E</td>
+                                    <td>Sanya, Jay, Tina</td>
+                                    <td><span class="chip pending"><i class="ph-fill ph-clock"></i> Pending</span></td>
+                                    <td>Apr 3, 2026</td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Student List -->
+            <div id="view-student-list" class="content-view hidden">
+                <div class="glass-card student-upload-card">
+                    <div class="upload-card-header">
+                        <h3><i class="ph ph-upload-simple"></i> Import Students</h3>
+                        <span class="upload-hint">Upload a file to bulk-add students</span>
+                    </div>
+                    <label for="upload-students-file" class="student-drop-zone" id="student-drop-zone">
+                        <input type="file" id="upload-students-file" accept=".xlsx,.xls,.docx,.pdf" hidden />
+                        <div class="upload-icon-wrapper">
+                            <i class="ph ph-cloud-arrow-up"></i>
+                        </div>
+                        <h3>Drag & drop your file here</h3>
+                        <p>or <span class="browse-link">browse</span> to choose a file</p>
+                        <span class="file-formats">.xlsx &nbsp; .xls &nbsp; .docx &nbsp; .pdf</span>
+                    </label>
+                    <div class="upload-file-preview hidden" id="upload-file-preview">
+                        <div class="file-details">
+                            <i class="ph ph-file-text"></i>
+                            <span id="upload-file-name">No file selected</span>
+                        </div>
+                        <button class="remove-file-btn" id="remove-upload-file" title="Remove file">
+                            <i class="ph ph-x"></i>
+                        </button>
+                    </div>
+                    <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
+                        <i class="ph ph-user-plus"></i> Add Students
+                    </button>
+                </div>
+
+                <div class="glass-card mentor-table-card">
+                    <div class="table-header-bar">
+                        <h3><i class="ph ph-users"></i> All Students</h3>
+                        <div class="table-search">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" placeholder="Search students..." id="student-search">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="mentor-table">
+                            <thead>
+                                <tr>
+                                    <th>Student Name</th>
+                                    <th>PRN</th>
+                                    <th>Group</th>
+                                    <th>Project</th>
+                                    <th>Submissions</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Ravi Kumar
+                                    </td>
+                                    <td>PRN2024001</td>
+                                    <td>Group A</td>
+                                    <td>AI-Based Plagiarism Detector</td>
+                                    <td><span class="chip verified">3 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Priya Sharma
+                                    </td>
+                                    <td>PRN2024002</td>
+                                    <td>Group A</td>
+                                    <td>AI-Based Plagiarism Detector</td>
+                                    <td><span class="chip checking">2 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Anika Patel
+                                    </td>
+                                    <td>PRN2024003</td>
+                                    <td>Group B</td>
+                                    <td>Smart Attendance System</td>
+                                    <td><span class="chip verified">3 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Rohan Mehta
+                                    </td>
+                                    <td>PRN2024004</td>
+                                    <td>Group B</td>
+                                    <td>Smart Attendance System</td>
+                                    <td><span class="chip pending">1 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Meera Joshi
+                                    </td>
+                                    <td>PRN2024005</td>
+                                    <td>Group C</td>
+                                    <td>E-Commerce Platform</td>
+                                    <td><span class="chip pending">0 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                                <tr>
+                                    <td class="student-name-cell">
+                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                        Karan Singh
+                                    </td>
+                                    <td>PRN2024006</td>
+                                    <td>Group C</td>
+                                    <td>E-Commerce Platform</td>
+                                    <td><span class="chip checking">2 / 3</span></td>
+                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <!-- View: Group Connect (Group Specific Chat & Meet Room) -->
+            <div id="view-group-connect" class="content-view hidden">
+                <div class="group-connect-layout">
+                    <!-- Left Sidebar: Group Selector -->
+                    <div class="card glass-card group-sidebar-card">
+                        <div class="group-list-header">
+                            <span><i class="ph ph-users-three" style="color: var(--primary);"></i> Assigned Groups</span>
+                            <span class="chip" style="font-size: 0.72rem;" id="total-groups-badge">5 Groups</span>
+                        </div>
+                        <div class="group-item-list" id="group-selector-list">
+                            <!-- Group list items dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Group Direct Chat & Video Call Room -->
+                    <div class="card glass-card chat-room-card">
+                        <div class="chat-room-header">
+                            <div class="chat-room-info">
+                                <h4 id="active-group-title">Group A - AI Plagiarism Detector</h4>
+                                <span id="active-group-members"><i class="ph ph-users"></i> Members: Ravi, Priya, Amit</span>
+                            </div>
+                            <div class="chat-room-actions">
+                                <button class="btn btn-secondary btn-sm" id="btn-start-instant-meet" type="button" style="display: flex; align-items: center; gap: 6px; padding: 0.5rem 0.9rem; font-size: 0.85rem;" title="Start video meeting with this group">
+                                    <i class="ph-fill ph-video-camera" style="color: var(--primary);"></i> Start Meet
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="btn-schedule-group-meet" type="button" style="display: flex; align-items: center; gap: 6px; padding: 0.5rem 0.9rem; font-size: 0.85rem;" title="Schedule a review session" onclick="document.getElementById('review-modal').classList.add('active')">
+                                    <i class="ph ph-calendar-plus"></i> Schedule
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Stream -->
+                        <div class="chat-messages-body" id="group-chat-stream">
+                            <!-- Dynamically loaded chat bubbles -->
+                        </div>
+
+                        <!-- Chat Input Bar -->
+                        <form class="chat-input-bar" id="group-chat-form">
+                            <button type="button" class="btn btn-secondary" id="btn-chat-send-meet-link" style="border-radius: 50%; width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Send instant video call link to group">
+                                <i class="ph-fill ph-video-camera" style="color: var(--primary); font-size: 1.1rem;"></i>
+                            </button>
+                            <input type="text" id="group-chat-input" class="chat-input-field" placeholder="Type a message or instruction for this group..." required autocomplete="off">
+                            <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.2rem; display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                                <span>Send</span>
+                                <i class="ph ph-paper-plane-right"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Schedule Review Modal -->
+    <div class="review-modal-overlay" id="review-modal">
+        <div class="review-modal glass-card">
+            <div class="modal-header">
+                <h2><i class="ph ph-calendar-plus"></i> Schedule a Review</h2>
+                <button class="modal-close-btn" id="modal-close-btn" onclick="document.getElementById('review-modal').classList.remove('active')">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form class="modal-form" id="review-form">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="review-date">Date</label>
+                        <input type="date" id="review-date" class="modal-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="review-time">Time</label>
+                        <input type="time" id="review-time" class="modal-input" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="review-type">Review Type</label>
+                    <select id="review-type" class="modal-select">
+                        <option value="" disabled selected>Select review type</option>
+                        <option value="progress">Progress Review-1</option>
+                        <option value="mid-term">Progress Review-2</option>
+                        <option value="final">Final Presentation</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="review-notes">Notes (optional)</label>
+                    <textarea id="review-notes" class="modal-textarea" rows="3" placeholder="Add any notes for the review..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('review-modal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-confirm-review">
+                        <i class="ph ph-check-circle"></i> Confirm Schedule
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div class="review-modal-overlay" id="edit-profile-modal">
+        <div class="review-modal glass-card" style="max-width: 420px;">
+            <div class="modal-header">
+                <h2><i class="ph ph-user-gear"></i> Edit Profile</h2>
+                <button class="modal-close-btn" id="profile-modal-close-btn" type="button">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form class="modal-form" id="edit-profile-form">
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem; gap: 0.75rem;">
+                    <div class="avatar" id="profile-modal-preview" style="width: 80px; height: 80px; font-size: 2.5rem; border: 3px solid var(--primary); background: rgba(99,102,241,0.15); display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%;">
+                        <i class="ph-fill ph-user"></i>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <label for="profile-pic-input" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            <i class="ph ph-upload-simple"></i> Upload Photo
+                        </label>
+                        <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                        <button type="button" class="btn btn-secondary" id="btn-remove-photo" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                            <i class="ph ph-trash"></i> Reset Icon
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-display-name">Display Name</label>
+                    <input type="text" id="edit-display-name" class="modal-input" placeholder="Enter display name" required>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-profile">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-profile">
+                        <i class="ph ph-check-circle"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // Auth Guard & Mentor Name
+        // ============================================
+        const mentorUser = localStorage.getItem('mentorUser');
+        if (!mentorUser) {
+            window.location.href = 'mentor_auth.html';
+        }
+        // Profile display setup
+        let customMentorName = localStorage.getItem('mentorName') || mentorUser;
+        let customMentorPic = localStorage.getItem('mentorPic') || null;
+
+        function updateAvatarElements(picUrl) {
+            const sidebarAvatar = document.getElementById('sidebar-avatar');
+            const previewAvatar = document.getElementById('profile-modal-preview');
+            const content = picUrl 
+                ? `<img src="${picUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` 
+                : `<i class="ph-fill ph-user"></i>`;
+            if (sidebarAvatar) sidebarAvatar.innerHTML = content;
+            if (previewAvatar) previewAvatar.innerHTML = content;
+        }
+
+        const nameEl = document.getElementById('mentor-display-name');
+        if (nameEl) nameEl.textContent = customMentorName;
+        updateAvatarElements(customMentorPic);
+
+        // Profile Modal Logic
+        let tempPic = customMentorPic;
+        const profileModal = document.getElementById('edit-profile-modal');
+        const trigger = document.getElementById('user-profile-trigger');
+        const closeBtn = document.getElementById('profile-modal-close-btn');
+        const cancelBtn = document.getElementById('btn-cancel-profile');
+        const picInput = document.getElementById('profile-pic-input');
+        const removePicBtn = document.getElementById('btn-remove-photo');
+        const profileForm = document.getElementById('edit-profile-form');
+        const nameInput = document.getElementById('edit-display-name');
+
+        function openProfileModal() {
+            tempPic = localStorage.getItem('mentorPic') || null;
+            nameInput.value = localStorage.getItem('mentorName') || mentorUser;
+            updateAvatarElements(tempPic);
+            profileModal.classList.add('active');
+        }
+
+        function closeProfileModal() {
+            profileModal.classList.remove('active');
+        }
+
+        if (trigger) trigger.addEventListener('click', openProfileModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeProfileModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeProfileModal);
+
+        if (picInput) {
+            picInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        tempPic = evt.target.result;
+                        updateAvatarElements(tempPic);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        if (removePicBtn) {
+            removePicBtn.addEventListener('click', () => {
+                tempPic = null;
+                updateAvatarElements(null);
+                if (picInput) picInput.value = '';
+            });
+        }
+
+        if (profileForm) {
+            profileForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newName = nameInput.value.trim();
+                if (newName) {
+                    localStorage.setItem('mentorName', newName);
+                    if (tempPic) {
+                        localStorage.setItem('mentorPic', tempPic);
+                    } else {
+                        localStorage.removeItem('mentorPic');
+                    }
+                    if (nameEl) nameEl.textContent = newName;
+                    updateAvatarElements(tempPic);
+                    closeProfileModal();
+                }
+            });
+        }
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('mentorUser');
+            localStorage.removeItem('mentorName');
+            localStorage.removeItem('mentorPic');
+            window.location.href = 'mentor_auth.html';
+        });
+
+        // ============================================
+        // Mentor Dashboard - Navigation & View Switching
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            const navConfig = {
+                'nav-dashboard':     { view: 'view-dashboard',     title: 'Mentor Dashboard',  subtitle: 'Overview of your assigned student groups' },
+                'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Manage and review all assigned projects' },
+                'nav-student-list':  { view: 'view-student-list',  title: 'Student List',      subtitle: 'View all students under your mentorship' },
+                'nav-group-connect': { view: 'view-group-connect', title: 'Group Connect',     subtitle: 'Make groups to chat with the assigned student groups' },
+            };
+
+            const mainTitle = document.getElementById('main-title');
+            const mainSubtitle = document.getElementById('main-subtitle');
+
+            function switchView(navId) {
+                // Update active nav
+                document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => n.classList.remove('active'));
+                document.getElementById(navId).classList.add('active');
+
+                // Hide all views, show target
+                document.querySelectorAll('.content-view').forEach(v => v.classList.add('hidden'));
+                document.getElementById(navConfig[navId].view).classList.remove('hidden');
+
+                // Update header
+                mainTitle.textContent = navConfig[navId].title;
+                mainSubtitle.textContent = navConfig[navId].subtitle;
+
+                // Fetch projects when navigating to project list
+                if (navId === 'nav-project-list') {
+                    loadProjects();
+                }
+                // Fetch students when navigating to student list
+                if (navId === 'nav-student-list') {
+                    loadStudents();
+                }
+                // Render connect history when navigating to Group Connect
+                if (navId === 'nav-group-connect') {
+                    renderConnectHistory();
+                }
+            }
+
+            // Attach click listeners
+            Object.keys(navConfig).forEach(navId => {
+                const el = document.getElementById(navId);
+                if (el) {
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        switchView(navId);
+                    });
+                }
+            });
+
+            // ============================================
+            // Load Projects from API
+            // ============================================
+            async function loadProjects() {
+                const tbody = document.querySelector('#view-project-list .mentor-table tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading projects...</td></tr>';
+
+                try {
+                    const response = await fetch('http://localhost:8000/api/projects');
+                    if (!response.ok) throw new Error('Failed to fetch');
+                    const projects = await response.json();
+
+                    if (projects.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No projects submitted yet.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = projects.map(p => `
+                        <tr>
+                            <td class="project-name">${p.project_name || 'Untitled'}</td>
+                            <td>Group ${p.group_no || '--'}</td>
+                            <td>${p.team || 'N/A'}</td>
+                            <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Submitted</span></td>
+                            <td>${p.year || 'N/A'}</td>
+                            <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                            <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                        </tr>
+                    `).join('');
+
+                    // Update dashboard stat
+                    const statCards = document.querySelectorAll('.mentor-stat-card .stat-value');
+                    if (statCards[1]) statCards[1].textContent = projects.length;
+                } catch (error) {
+                    console.error('Error loading projects:', error);
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load projects. Ensure backend is running.</td></tr>';
+                }
+            }
+
+            // ============================================
+            // Load Students from API
+            // ============================================
+            async function loadStudents() {
+                const tbody = document.querySelector('#view-student-list .mentor-table tbody');
+                if (!tbody) return;
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading students...</td></tr>';
+
+                try {
+                    const response = await fetch('http://localhost:8000/api/students');
+                    if (!response.ok) throw new Error('Failed to fetch');
+                    const students = await response.json();
+
+                    if (students.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students registered yet.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = students.map(s => `
+                        <tr>
+                            <td class="student-name">
+                                <div class="avatar-small"><i class="ph-fill ph-student"></i></div>
+                                <div>
+                                    <div style="font-weight:600; color:var(--text-main);">${s.roll_no}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-muted);">${s.year}</div>
+                                </div>
+                            </td>
+                            <td>${s.team_name}</td>
+                            <td>${s.project_name}</td>
+                            <td>${s.submissions}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-icon" title="View Profile"><i class="ph ph-user"></i></button>
+                                    <button class="btn-icon" title="Message"><i class="ph ph-chat-teardrop"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+
+                    // Update dashboard stat
+                    const statCards = document.querySelectorAll('.mentor-stat-card .stat-value');
+                    if (statCards[0]) statCards[0].textContent = students.length;
+                } catch (error) {
+                    console.error('Error loading students:', error);
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load students. Ensure backend is running.</td></tr>';
+                }
+            }
+
+            // Table search filtering
+            function setupSearch(inputId, tableParentId) {
+                const input = document.getElementById(inputId);
+                if (!input) return;
+                input.addEventListener('input', () => {
+                    const query = input.value.toLowerCase();
+                    const rows = document.querySelectorAll(`#${tableParentId} .mentor-table tbody tr`);
+                    rows.forEach(row => {
+                        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
+                    });
+                });
+            }
+            setupSearch('project-search', 'view-project-list');
+            setupSearch('student-search', 'view-student-list');
+
+            // Schedule Review Modal Logic
+            document.getElementById('review-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btn-confirm-review');
+                btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i> Scheduling...';
+                btn.disabled = true;
+
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Scheduled!';
+                    btn.style.background = 'var(--status-verified)';
+                    
+                    setTimeout(() => {
+                        document.getElementById('review-modal').classList.remove('active');
+                        document.getElementById('review-form').reset();
+                        btn.innerHTML = '<i class="ph ph-check-circle"></i> Confirm Schedule';
+                        btn.style.background = '';
+                        btn.disabled = false;
+                    }, 1000);
+                }, 1200);
+            });
+
+            // Close modal on overlay click
+            document.getElementById('review-modal').addEventListener('click', function(e) {
+                if (e.target === this) this.classList.remove('active');
+            });
+
+            // Close modal on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') document.getElementById('review-modal').classList.remove('active');
+            });
+
+            // ============================================
+            // Group Connect (Group Specific Chat & Meet) Logic
+            // ============================================
+            const groupConnectData = [
+                {
+                    id: 'group-a',
+                    name: 'Group A',
+                    project: 'AI-Based Plagiarism Detector',
+                    members: 'Ravi Kumar, Priya Sharma, Amit Verma',
+                    initialMessages: [
+                        { sender: 'student', name: 'Ravi Kumar', text: 'Respected Mentor, we have submitted our draft report.', time: '10:15 AM' },
+                        { sender: 'mentor', text: 'Great work! Please prepare the demo slides for Review-1.', time: '10:30 AM' }
+                    ]
+                },
+                {
+                    id: 'group-b',
+                    name: 'Group B',
+                    project: 'Smart Attendance System',
+                    members: 'Anika Patel, Rohan Mehta, Sneha Gupta',
+                    initialMessages: [
+                        { sender: 'student', name: 'Anika Patel', text: 'Could we schedule a short call regarding facial recognition accuracy?', time: 'Yesterday' },
+                        { sender: 'mentor', text: 'Sure Anika, let us connect today around 3 PM.', time: 'Yesterday' }
+                    ]
+                },
+                {
+                    id: 'group-c',
+                    name: 'Group C',
+                    project: 'E-Commerce Platform',
+                    members: 'Meera Joshi, Karan Singh, Dev Nanda',
+                    initialMessages: [
+                        { sender: 'mentor', text: 'Please ensure your database schema includes indexing for product search.', time: 'Apr 5' }
+                    ]
+                },
+                {
+                    id: 'group-d',
+                    name: 'Group D',
+                    project: 'Healthcare Chatbot',
+                    members: 'Pooja Nair, Varun Rao, Nikhil Sharma',
+                    initialMessages: [
+                        { sender: 'student', name: 'Varun Rao', text: 'We integrated the NLP dataset as discussed.', time: 'Apr 4' }
+                    ]
+                },
+                {
+                    id: 'group-e',
+                    name: 'Group E',
+                    project: 'Budget Tracker App',
+                    members: 'Sanya Iyer, Jay Shah, Tina Roy',
+                    initialMessages: [
+                        { sender: 'mentor', text: 'Welcome team! Feel free to share your initial project wireframes here.', time: 'Apr 3' }
+                    ]
+                }
+            ];
+
+            let currentGroupId = 'group-a';
+
+            function loadGroupChats() {
+                const stored = localStorage.getItem('groupConnectChats');
+                if (!stored) {
+                    localStorage.setItem('groupConnectChats', JSON.stringify(groupConnectData));
+                    return groupConnectData;
+                }
+                return JSON.parse(stored);
+            }
+
+            function saveGroupChats(data) {
+                localStorage.setItem('groupConnectChats', JSON.stringify(data));
+            }
+
+            function renderGroupSelectorList() {
+                const container = document.getElementById('group-selector-list');
+                if (!container) return;
+                const groups = loadGroupChats();
+
+                const badge = document.getElementById('total-groups-badge');
+                if (badge) badge.textContent = `${groups.length} Groups`;
+
+                container.innerHTML = groups.map(g => `
+                    <div class="group-item ${g.id === currentGroupId ? 'active' : ''}" data-id="${g.id}">
+                        <div class="group-item-title">
+                            <span>${g.name}</span>
+                            <i class="ph ph-caret-right" style="font-size: 0.8rem; opacity: 0.6;"></i>
+                        </div>
+                        <div class="group-item-sub">${g.project}</div>
+                    </div>
+                `).join('');
+
+                container.querySelectorAll('.group-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        currentGroupId = el.getAttribute('data-id');
+                        renderGroupSelectorList();
+                        renderActiveGroupRoom();
+                    });
+                });
+            }
+
+            function renderActiveGroupRoom() {
+                const groups = loadGroupChats();
+                const group = groups.find(g => g.id === currentGroupId) || groups[0];
+                if (!group) return;
+
+                const titleEl = document.getElementById('active-group-title');
+                const membersEl = document.getElementById('active-group-members');
+                if (titleEl) titleEl.textContent = `${group.name} - ${group.project}`;
+                if (membersEl) membersEl.innerHTML = `<i class="ph ph-users"></i> Members: ${group.members}`;
+
+                const stream = document.getElementById('group-chat-stream');
+                if (!stream) return;
+
+                if (!group.initialMessages || group.initialMessages.length === 0) {
+                    stream.innerHTML = `<div style="text-align: center; color: var(--text-muted); margin: auto;"><i class="ph ph-chats-teardrop" style="font-size: 2.2rem; opacity: 0.4;"></i><p style="margin-top: 8px;">No messages in ${group.name} yet. Type a message below to start communicating.</p></div>`;
+                    return;
+                }
+
+                stream.innerHTML = group.initialMessages.map(msg => {
+                    if (msg.isMeet) {
+                        return `
+                            <div style="align-self: center; background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1)); border: 1px solid rgba(99,102,241,0.2); border-radius: 14px; padding: 0.85rem 1.25rem; display: flex; align-items: center; gap: 14px; margin: 0.5rem 0; width: 85%; max-width: 480px; box-shadow: 0 4px 14px rgba(99,102,241,0.08);">
+                                <div style="width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;">
+                                    <i class="ph-fill ph-video-camera"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.92rem;">🎥 ${msg.title || 'Instant Video Call'}</div>
+                                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><i class="ph ph-clock"></i> ${msg.time}</div>
+                                </div>
+                                <a href="${msg.link}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none; display: flex; align-items: center; gap: 4px; padding: 0.45rem 0.9rem; font-size: 0.82rem; white-space: nowrap;">
+                                    <i class="ph ph-arrow-square-out"></i> Join Meet
+                                </a>
+                            </div>
+                        `;
+                    }
+
+                    const isMentor = msg.sender === 'mentor';
+                    const senderName = isMentor ? 'You (Mentor)' : (msg.name || 'Student');
+
+                    return `
+                        <div class="chat-bubble ${isMentor ? 'mentor' : 'student'}">
+                            <span class="sender-label">${senderName}</span>
+                            <div>${msg.text}</div>
+                            <span class="chat-time">${msg.time}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                stream.scrollTop = stream.scrollHeight;
+            }
+
+            function sendMeetToActiveGroup() {
+                const groups = loadGroupChats();
+                const groupIndex = groups.findIndex(g => g.id === currentGroupId);
+                if (groupIndex === -1) return;
+
+                const code = Math.random().toString(36).substring(2, 5) + '-' + 
+                             Math.random().toString(36).substring(2, 6) + '-' + 
+                             Math.random().toString(36).substring(2, 5);
+                const meetUrl = `https://meet.google.com/${code}`;
+                const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today';
+
+                groups[groupIndex].initialMessages.push({
+                    isMeet: true,
+                    title: `Video Call with ${groups[groupIndex].name}`,
+                    link: meetUrl,
+                    sender: 'mentor',
+                    time: nowTime
+                });
+
+                saveGroupChats(groups);
+                renderActiveGroupRoom();
+
+                // Open meet link in new tab
+                window.open(meetUrl, '_blank');
+            }
+
+            // Form message submit
+            const groupChatForm = document.getElementById('group-chat-form');
+            if (groupChatForm) {
+                groupChatForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const input = document.getElementById('group-chat-input');
+                    const text = input ? input.value.trim() : '';
+                    if (!text) return;
+
+                    const groups = loadGroupChats();
+                    const groupIndex = groups.findIndex(g => g.id === currentGroupId);
+                    if (groupIndex === -1) return;
+
+                    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today';
+
+                    groups[groupIndex].initialMessages.push({
+                        sender: 'mentor',
+                        text: text,
+                        time: nowTime
+                    });
+
+                    saveGroupChats(groups);
+                    input.value = '';
+                    renderActiveGroupRoom();
+                });
+            }
+
+            // Quick meet buttons
+            const btnInstantMeet = document.getElementById('btn-start-instant-meet');
+            const btnChatSendMeet = document.getElementById('btn-chat-send-meet-link');
+            if (btnInstantMeet) btnInstantMeet.addEventListener('click', sendMeetToActiveGroup);
+            if (btnChatSendMeet) btnChatSendMeet.addEventListener('click', sendMeetToActiveGroup);
+
+            // Initial render
+            renderGroupSelectorList();
+            renderActiveGroupRoom();
+            loadProjects();
+            loadStudents();
+
+            // --- Student Upload Card Interactions ---
+            const dropZone = document.getElementById('student-drop-zone');
+            const fileInput = document.getElementById('upload-students-file');
+            const filePreview = document.getElementById('upload-file-preview');
+            const fileNameSpan = document.getElementById('upload-file-name');
+            const removeBtn = document.getElementById('remove-upload-file');
+            const addStudentsBtn = document.getElementById('add-students-btn');
+
+            if (dropZone && fileInput) {
+                // Drag events
+                ['dragenter', 'dragover'].forEach(evt => {
+                    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+                });
+                ['dragleave', 'drop'].forEach(evt => {
+                    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+                });
+                dropZone.addEventListener('drop', e => {
+                    if (e.dataTransfer.files.length) {
+                        fileInput.files = e.dataTransfer.files;
+                        showFilePreview(fileInput.files[0]);
+                    }
+                });
+
+                // Regular file pick
+                fileInput.addEventListener('change', () => {
+                    if (fileInput.files.length) {
+                        showFilePreview(fileInput.files[0]);
+                    }
+                });
+
+                // Remove file
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', () => {
+                        fileInput.value = '';
+                        filePreview.classList.add('hidden');
+                        dropZone.style.display = '';
+                        addStudentsBtn.disabled = true;
+                    });
+                }
+
+                function showFilePreview(file) {
+                    fileNameSpan.textContent = file.name;
+                    filePreview.classList.remove('hidden');
+                    dropZone.style.display = 'none';
+                    addStudentsBtn.disabled = false;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

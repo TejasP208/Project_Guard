@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal - Submit Project</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons for modern, clean icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="ph ph-graduation-cap"></i>
+                    <span>ProjectGuard</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item" id="nav-dashboard">
+                    <i class="ph ph-squares-four"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item active" id="nav-submit">
+                    <i class="ph ph-upload-simple"></i>
+                    <span>Submit Project</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-find">
+                    <i class="ph ph-atom"></i>
+                    <span>Ask Axiom</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-team">
+                    <i class="ph ph-users"></i>
+                    <span>Find your Team</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile" id="user-profile-trigger" style="cursor: pointer;" title="Click to edit profile">
+                    <div class="avatar" id="sidebar-avatar"><i class="ph-fill ph-user"></i></div>
+                    <div class="user-info">
+                        <span class="user-name" id="student-display-name">Student</span>
+                        <span class="user-role" style="display: flex; align-items: center; gap: 4px;">
+                            Student <i class="ph ph-pencil-simple" style="font-size: 0.75rem; opacity: 0.7;"></i>
+                        </span>
+                    </div>
+                </div>
+                <div class="logout-wrapper"
+                    style="margin-top: 1rem; border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                    <a href="#" class="nav-item" id="logout-btn">
+                        <i class="ph ph-sign-out"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="content-view hidden">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Welcome back, Unknown. Here's your project status.</p>
+                    </div>
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+
+                <div class="dashboard-grid">
+                    <!-- Progress Card -->
+                    <div class="card glass-card progress-overview">
+                        <h3>Project Progress</h3>
+                        <div class="main-progress">
+                            <span class="percentage">46%</span>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar" style="width: 46%"></div>
+                            </div>
+                        </div>
+                        <ul class="milestones">
+                            <li class="completed"><i class="ph-fill ph-check-circle"></i> Review-1</li>
+                            <li class="completed"><i class="ph-fill ph-check-circle"></i> Review-2</li>
+                            <li class="active"><i class="ph-fill ph-spinner-gap"></i> Review-3</li>
+                            <li class="pending"><i class="ph ph-circle"></i> Review-4</li>
+                            <li class="pending"><i class="ph ph-circle"></i>Final Submission</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Find Your Project View (Axiom AI Search) -->
+            <div id="view-find" class="content-view hidden">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Find your Project</h1>
+                        <p class="page-subtitle">Use Axiom AI to locate and analyze your past submissions</p>
+                    </div>
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+                <div class="ai-search-container glass-card ai-glow-card">
+                    <div class="ai-branding ai-pulse-branding">
+                        <div class="ai-logo-wrapper">
+                            <div class="premium-ai-orb">
+                                <i class="ph-fill ph-terminal-window"></i>
+                            </div>
+                            <div class="glow-ring"></div>
+                            <div class="glow-ring ring-2"></div>
+                        </div>
+                        <h2>Axiom AI Search</h2>
+                        <p>Intelligent semantic search for your knowledge base</p>
+                    </div>
+                    <div id="find-chat-box" class="chatbot-messages expanded-chat">
+                        <div class="message-wrapper ai-wrapper">
+                            <div class="message-avatar"><i class="ph-fill ph-terminal-window"></i></div>
+                            <div class="ai-message premium-glass-bubble">
+                                <p>I'm Axiom, ready to search your project . What do you need?</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-chat-box premium-input-container">
+                        <div class="input-wrapper glowing-input">
+                            <i class="ph ph-terminal-window ai-sparkle-icon"></i>
+                            <input type="text" id="find-chat-input" placeholder="e.g., Help me find my Project...">
+                            <button id="find-send-btn" class="btn btn-primary premium-send-btn chat-send"><i
+                                    class="ph-bold ph-arrow-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Project View -->
+            <div id="view-submit" class="content-view">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Submit Your Project</h1>
+                        <p class="page-subtitle">Upload your final assignment for evaluation</p>
+                    </div>
+                    <!-- Optional notification icon -->
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+
+                <div class="submission-container">
+                    <div class="card glass-card">
+
+                        <form id="submission-form" class="submission-form">
+
+                            <!-- Inputs -->
+                            <div class="form-group">
+                                <label for="project-title">Project Title</label>
+                                <input type="text" id="project-title" placeholder="e.g., Advanced AI Algorithms"
+                                    required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="project-desc">Project Abstract</label>
+                                <textarea id="project-desc" rows="4"
+                                    placeholder="Briefly describe the objective and methodology of your project..."></textarea>
+                            </div>
+
+                            <!-- Drag & Drop Area -->
+                            <div class="form-group">
+                                <label>Upload Project File</label>
+                                <div class="drop-zone" id="drop-zone">
+                                    <div class="drop-zone-content">
+                                        <div class="upload-icon-wrapper">
+                                            <i class="ph ph-plus"></i>
+                                        </div>
+                                        <h3>Drag & Drop your files here</h3>
+                                        <p>or click to browse</p>
+                                        <span class="file-formats">Supported formats: PDF, DOCX, ZIP (Max 50MB)</span>
+                                    </div>
+                                    <input type="file" id="file-input" hidden accept=".pdf,.docx,.zip">
+                                </div>
+
+                                <!-- State: Upload Progress (Hidden initially) -->
+                                <div class="upload-progress-container" id="upload-progress-area" style="display: none;">
+                                    <div class="file-info-bar">
+                                        <div class="file-details">
+                                            <i class="ph ph-file-doc"></i>
+                                            <span id="file-name-display">project_final_v2.pdf</span>
+                                        </div>
+                                        <button type="button" class="remove-file-btn" id="remove-file"><i
+                                                class="ph ph-x"></i></button>
+                                    </div>
+                                    <div class="progress-bar-wrapper">
+                                        <div class="progress-bar" id="upload-progress-bar"></div>
+                                    </div>
+                                    <div class="progress-stats">
+                                        <span id="upload-status-text">Uploading...</span>
+                                        <span id="upload-percentage">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Evaluation Status Area (Hidden initially) -->
+                            <div class="evaluation-panel" id="evaluation-panel" style="display: none;">
+                                <div class="status-grid">
+                                    <div class="status-item">
+                                        <span class="status-label">Submission Status</span>
+                                        <div class="chips">
+                                            <span class="chip pending" id="chip-pending">Pending</span>
+                                            <span class="chip checking" id="chip-checking"
+                                                style="display: none;">Checking</span>
+                                            <span class="chip verified" id="chip-verified"
+                                                style="display: none;">Verified</span>
+                                        </div>
+                                    </div>
+                                    <div class="status-item score-container" id="score-container"
+                                        style="display: none;">
+                                        <span class="status-label">Plagiarism Score</span>
+                                        <div class="score-indicator" id="score-value">
+                                            <span class="score-number safe">12%</span>
+                                            <span class="chip similarity safe">Low Similarity</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="btn-check" disabled>
+                                    <i class="ph-fill ph-shield-check"></i>
+                                    Check Plagiarism
+                                </button>
+                                <button onclick="submitProject()" type="submit" class="btn btn-primary" id="btn-submit"
+                                    disabled>
+                                    <i class="ph ph-upload-simple"></i>
+                                    Submit Your Project
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plagiarism Check View (Placeholder) -->
+            <div id="view-plagiarism" class="content-view hidden">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Plagiarism Check</h1>
+                    </div>
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+                <div class="glass-card">
+                    <p>Plagiarism checking tools go here.</p>
+                </div>
+            </div>
+
+            <!-- Find Your Team View -->
+            <div id="view-team" class="content-view hidden">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Find your Team</h1>
+                        <p class="page-subtitle">Create a new team or join an existing one</p>
+                    </div>
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+
+                <div class="team-options-container">
+                    <!-- Create Team Card -->
+                    <div class="card glass-card team-option-card" id="create-team-card">
+                        <div class="team-option-icon create-icon">
+                            <i class="ph ph-users-three"></i>
+                        </div>
+                        <h2>Create Team</h2>
+                        <p>Start a new team and invite your classmates to collaborate on a project together.</p>
+                        <form id="create-team-form" class="team-form" style="display: none;">
+                            <div class="form-group">
+                                <label for="team-name">Team Name</label>
+                                <input type="text" id="team-name" placeholder="e.g., Team Alpha" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="team-max">Max Members</label>
+                                <input type="number" id="team-max" value="4" min="2" max="10">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-create-team">Cancel</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="ph ph-plus-circle"></i>
+                                    Create Team
+                                </button>
+                            </div>
+                        </form>
+                        <button class="btn btn-primary team-action-btn" id="btn-show-create-team">
+                            <i class="ph ph-plus-circle"></i>
+                            Create a New Team
+                        </button>
+                    </div>
+
+                    <!-- Join Team Card -->
+                    <div class="card glass-card team-option-card" id="join-team-card">
+                        <div class="team-option-icon join-icon">
+                            <i class="ph ph-sign-in"></i>
+                        </div>
+                        <h2>Join Team</h2>
+                        <p>Enter a team code shared by your teammate to join an existing project team.</p>
+                        <form id="join-team-form" class="team-form" style="display: none;">
+                            <div class="form-group">
+                                <label for="team-code">Team Code</label>
+                                <input type="text" id="team-code" placeholder="e.g., TEAM-A1B2C3" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-join-team">Cancel</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="ph ph-sign-in"></i>
+                                    Join Team
+                                </button>
+                            </div>
+                        </form>
+                        <button class="btn btn-primary team-action-btn" id="btn-show-join-team">
+                            <i class="ph ph-sign-in"></i>
+                            Join an Existing Team
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Team Roster Card (shown after joining/creating) -->
+                <div id="team-roster-card" class="card glass-card team-roster hidden">
+                    <div class="roster-top-bar">
+                        <div class="roster-team-label" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="ph-fill ph-crown" style="color: #f59e0b; font-size: 1rem;"></i>
+                                <span id="roster-team-name">TEAM: CODE WARRIORS</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted); margin-left: 24px;">
+                                <span>Code: <code id="roster-team-code" style="font-family: monospace; font-weight: bold; letter-spacing: 0.05em;">-------</code></span>
+                                <button type="button" id="btn-copy-roster-code" class="glass-btn" style="border: none; background: transparent; padding: 2px 4px; cursor: pointer; color: var(--primary);" title="Copy team code">
+                                    <i class="ph ph-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="position: relative;">
+                            <button class="roster-menu-btn" id="btn-roster-menu" title="Team options">
+                                <i class="ph ph-dots-three"></i>
+                            </button>
+                            <div id="roster-dropdown" class="hidden" style="position: absolute; right: 0; top: 42px; min-width: 150px; padding: 6px; z-index: 100; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); background: rgba(255,255,255,0.98); backdrop-filter: blur(10px);">
+                                <button id="btn-leave-team" style="width:100%; text-align:left; padding:9px 14px; border:none; background:transparent; cursor:pointer; font-size:0.9rem; font-family:'Inter',sans-serif; border-radius:6px; display:flex; align-items:center; gap:8px; transition:background 0.2s;">
+                                    <i class="ph ph-sign-out" style="color:#ef4444; font-size:1rem;"></i>
+                                    <span style="color:#ef4444; font-weight:500;">Leave Team</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="roster-members" id="roster-members">
+                        <div class="member-slot filled leader">
+                            <div class="member-avatar">
+                                <i class="ph-fill ph-user"></i>
+                            </div>
+                            <span class="leader-badge"><i class="ph-fill ph-crown"></i></span>
+                            <span class="member-label" id="leader-name">You</span>
+                        </div>
+                        <div class="member-slot empty">
+                            <div class="member-avatar empty-avatar"><i class="ph ph-plus"></i></div>
+                            <span class="member-label">Invite</span>
+                        </div>
+                        <div class="member-slot empty">
+                            <div class="member-avatar empty-avatar"><i class="ph ph-plus"></i></div>
+                            <span class="member-label">Invite</span>
+                        </div>
+                        <div class="member-slot empty">
+                            <div class="member-avatar empty-avatar"><i class="ph ph-plus"></i></div>
+                            <span class="member-label">Invite</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Success Result Interface -->
+                <div id="team-creation-result" class="card glass-card result-card hidden">
+                    <!-- Decorative particles -->
+                    <div class="result-particles">
+                        <span class="particle"></span>
+                        <span class="particle"></span>
+                        <span class="particle"></span>
+                        <span class="particle"></span>
+                        <span class="particle"></span>
+                        <span class="particle"></span>
+                    </div>
+
+                    <div class="result-header">
+                        <div class="success-icon-wrapper animate-pop">
+                            <div class="success-icon-ring"></div>
+                            <div class="success-icon">
+                                <i class="ph-fill ph-check-circle"></i>
+                            </div>
+                        </div>
+                        <h3 class="result-title">Team Created Successfully!</h3>
+                        <p class="result-subtitle">Share this code with your classmates to have them join your team.</p>
+                    </div>
+
+                    <div class="code-display-box">
+                        <span class="code-label">YOUR TEAM CODE</span>
+                        <div class="code-value-wrapper">
+                            <code id="display-team-code">-------</code>
+                            <button id="btn-copy-code" class="copy-btn" title="Copy to clipboard">
+                                <i class="ph ph-copy"></i>
+                                <span class="copy-tooltip">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="result-actions">
+                        <button id="btn-dismiss-result" class="btn btn-secondary btn-sm">
+                            <i class="ph ph-x"></i>
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Settings View (Placeholder) -->
+            <div id="view-settings" class="content-view hidden">
+                <header class="top-header">
+                    <div>
+                        <h1 class="page-title">Settings</h1>
+                    </div>
+                    <button class="icon-btn glass-btn notification-btn">
+                        <i class="ph ph-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                </header>
+                <div class="glass-card">
+                    <p>Account settings go here.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div class="review-modal-overlay" id="edit-profile-modal">
+        <div class="review-modal glass-card" style="max-width: 420px;">
+            <div class="modal-header">
+                <h2><i class="ph ph-user-gear"></i> Edit Profile</h2>
+                <button class="modal-close-btn" id="profile-modal-close-btn" type="button">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form class="modal-form" id="edit-profile-form">
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem; gap: 0.75rem;">
+                    <div class="avatar" id="profile-modal-preview" style="width: 80px; height: 80px; font-size: 2.5rem; border: 3px solid var(--primary); background: rgba(99,102,241,0.15); display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%;">
+                        <i class="ph-fill ph-user"></i>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <label for="profile-pic-input" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            <i class="ph ph-upload-simple"></i> Upload Photo
+                        </label>
+                        <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                        <button type="button" class="btn btn-secondary" id="btn-remove-photo" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                            <i class="ph ph-trash"></i> Reset Icon
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-display-name">Display Name</label>
+                    <input type="text" id="edit-display-name" class="modal-input" placeholder="Enter display name" required>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-profile">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-profile">
+                        <i class="ph ph-check-circle"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
