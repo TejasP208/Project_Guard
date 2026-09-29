@@ -1,6 +1,5 @@
 numpy
 sentence-transformers
-sqlite3-api
 scikit-learn
 nltk
 PyMuPDF
@@ -10,4 +9,10 @@ pandas
 python-dotenv
 groq
 fastapi
-unicorn
+uvicorn
+SQLAlchemy
+passlib
+python-multipart
+psycopg[binary]
+pgvector
+httpx
