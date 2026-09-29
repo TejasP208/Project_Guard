@@ -1,6 +1,5 @@
 numpy
 sentence-transformers
-sqlite3-api
 scikit-learn
 nltk
 PyMuPDF
@@ -8,4 +7,12 @@ python-docx
 scipy
 pandas
 python-dotenv
-fastapi unicorn
+groq
+fastapi
+uvicorn
+SQLAlchemy
+passlib
+python-multipart
+psycopg[binary]
+pgvector
+httpx
