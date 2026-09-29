@@ -95,7 +95,13 @@ After importing project rows with `python migrate_sqlite_to_postgres.py`, set `C
 python -m Models.scripts.index_postgres_vectors
 ```
 
-This fills missing project embeddings using Cloudflare Workers AI and stores each vector alongside its project ID and metadata in PostgreSQL. `embeddings.project_vectors.find_similar_projects(title, abstract, top_k)` performs cosine-similarity search. The existing SBERT plagiarism checker remains unchanged and continues using its current local index until you explicitly switch its scoring path.
+This fills missing project embeddings using Cloudflare Workers AI and stores each vector alongside its project ID and metadata in PostgreSQL. `embeddings.project_vectors.find_similar_projects(title, abstract, top_k)` performs cosine-similarity search.
+
+With PostgreSQL configured, the plagiarism checker combines TF-IDF (weight 0.60) with Qwen cosine similarity (weight 0.40). Qwen compares the submitted title/description and every extracted document chunk against stored project vectors; the highest chunk similarity is used per project. Chunks are up to 3000 characters with a 200-character overlap, and documents requiring more than 32 chunks are rejected with a clear error. The extracted document text also contributes to TF-IDF. All projects need vectors before checking a submission. The displayed percentage and existing 30% submission cutoff use provisional weights and must be calibrated with representative submissions. When using the local SQLite default, the checker retains its previous TF-IDF, LDA, and SBERT path.
+
+New projects submitted while PostgreSQL is configured receive a Qwen embedding before they are saved. If Cloudflare is unavailable, the submission fails instead of storing a project without a vector.
+
+To assess the provisional score, copy `embeddings/labeled_cases.csv` and add real submissions labeled `similar` (should be blocked) or `unrelated` (should be allowed). Use `file_path` for a PDF, DOCX, or TXT file relative to the CSV, or put text in `file_text`. Then run `python -m embeddings.calibrate path/to/labeled_cases.csv`. The tool reports the current 30% cutoff and, after at least 10 examples per label, an exploratory cutoff range. It does not change application thresholds automatically.
 
 ## Common issues
 

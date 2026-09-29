@@ -1,18 +1,22 @@
-numpy
-sentence-transformers
-scikit-learn
-nltk
-PyMuPDF
-python-docx
-scipy
-pandas
-python-dotenv
-groq
 fastapi
 uvicorn
+pydantic
+starlette
 SQLAlchemy
 passlib
 python-multipart
 psycopg[binary]
 pgvector
 httpx
+python-dotenv
+groq
+PyMuPDF
+python-docx
+numpy
+scikit-learn
+nltk
+# Required by the SQLite fallback checker and legacy index scripts.
+sentence-transformers
+scipy
+# Used by the included manual API request script.
+requests

@@ -55,3 +55,21 @@ def find_similar_projects(title: str, abstract: str = "", top_k: int = 5) -> lis
             }
             for project, cosine_distance in rows
         ]
+
+
+def best_similarities_for_texts(texts: list[str]) -> dict[int, float]:
+    """Return each project's strongest cosine similarity across query chunks."""
+    _require_postgresql()
+    vectors = CloudflareEmbeddingClient().embed_many(texts)
+    best = {}
+    with SessionLocal() as db:
+        for vector in vectors:
+            distance = Project.embedding.cosine_distance(vector)
+            rows = db.execute(
+                select(Project.id, distance)
+                .where(Project.embedding.is_not(None))
+            ).all()
+            for project_id, cosine_distance in rows:
+                similarity = max(0.0, min(1.0, 1.0 - float(cosine_distance)))
+                best[project_id] = max(best.get(project_id, 0.0), similarity)
+    return best

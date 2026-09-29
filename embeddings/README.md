@@ -29,10 +29,18 @@ normalize the returned values; the future similarity query should compute
 cosine similarity. The model is `@cf/qwen/qwen3-embedding-0.6b`, and the
 request sends `{"text": [text]}` to Cloudflare Workers AI.
 
-Use the same text construction for indexed projects and incoming submissions.
-The current index uses `"{project_name}. {project_abstract}"`; changing this
-format requires re-embedding indexed projects. Long documents will need a
-separate chunking strategy before this adapter is used in production.
+The project index uses `"{project_name}. {project_abstract}"`; changing this
+format requires re-embedding indexed projects. For plagiarism checks, the
+title/description and all extracted document chunks are embedded separately.
+The strongest chunk match is used for each stored project. Documents are
+split into chunks of up to 3000 characters with a 200-character overlap.
+More than 32 document chunks produces an error instead of silently ignoring
+the end of the document. `embed_many(texts)` batches up to eight texts per
+Cloudflare request and returns one vector for each input in order.
+
+The combined TF-IDF/Qwen score and 30% frontend cutoff are provisional. To
+evaluate them, fill a copy of `labeled_cases.csv` with real submissions and
+run `python -m embeddings.calibrate path/to/labeled_cases.csv`.
 
 To try it manually after adding the two values to `.env`:
 
