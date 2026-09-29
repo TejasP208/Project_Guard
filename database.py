@@ -24,8 +24,14 @@ SessionLocal = sessionmaker(bind=engine)
 
 
 def migrate_database():
-    """Apply the existing safe, additive project-column migration."""
+    """Apply safe additive project-column and PostgreSQL vector migrations."""
     project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
     if "team_name" not in project_columns:
         with engine.begin() as connection:
             connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN team_name VARCHAR")
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN IF NOT EXISTS embedding vector(1024)"
+            )

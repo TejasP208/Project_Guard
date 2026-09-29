@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.orm import declarative_base
+from pgvector.sqlalchemy import VECTOR
 
 Base = declarative_base()
 
@@ -20,6 +21,9 @@ class Project(Base):
     project_name = Column(String)
     project_abstract = Column(String)
     team_name = Column(String, nullable=True)
+    # Qwen3 embeddings from Cloudflare Workers AI use 1024 dimensions.
+    # Kept nullable so existing SQLite/PostgreSQL project rows remain valid.
+    embedding = Column(VECTOR(1024), nullable=True)
 
 class Mentor(Base):
     __tablename__ = "mentors"
