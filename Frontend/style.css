@@ -893,9 +893,25 @@ input[type="password"]:focus {
     background: rgba(99, 102, 241, 0.1);
     padding: 12px 16px;
     border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     align-self: flex-start;
     border-left: 3px solid var(--primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+}
+
+.ai-message.streaming-cursor::after {
+    content: "▋";
+    display: inline-block;
+    color: var(--primary);
+    margin-left: 3px;
+    animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 .user-message {
@@ -903,8 +919,11 @@ input[type="password"]:focus {
     color: white;
     padding: 10px 14px;
     border-radius: var(--radius-sm) 0 var(--radius-sm) var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     align-self: flex-end;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
 }
 
 .ai-input-area {

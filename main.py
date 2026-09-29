@@ -3,7 +3,11 @@ from fastapi.responses import StreamingResponse
 from axiom_ai import Chatbot_stream
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, SessionLocal, migrate_database
-from models import Base, Project, Team, TeamMember, Student, Mentor
+from models import Base, Project, Team, TeamMember, Student, Mentor, MentorStudent
+from mentor_roster import mentor_key, parse_mentor_roster
+from openpyxl.utils.exceptions import InvalidFileException
+from zipfile import BadZipFile
+from sqlalchemy import func
 from passlib.hash import pbkdf2_sha256
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -64,8 +68,17 @@ class MentorLoginRequest(BaseModel):
 
 # Endpoints
 @app.get("/chat-stream")
-def chat_stream(prompt: str):
-    return StreamingResponse(Chatbot_stream(prompt), media_type="text/plain")
+async def chat_stream(prompt: str):
+    return StreamingResponse(
+        Chatbot_stream(prompt),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 @app.post("/signup")
 def signup(data: SignupRequest):
@@ -294,12 +307,13 @@ async def check_plagiarism(
 def mentor_signup(data: MentorSignupRequest):
     db = SessionLocal()
     try:
-        if db.query(Mentor).filter(Mentor.username == data.username).first():
+        username = data.username.strip()
+        if db.query(Mentor).filter(func.lower(Mentor.username) == username.lower()).first():
             raise HTTPException(status_code=400, detail="Username already registered")
 
         hashed_password = pbkdf2_sha256.hash(data.password)
         new_mentor = Mentor(
-            username=data.username,
+            username=username,
             password=hashed_password
         )
         db.add(new_mentor)
@@ -317,7 +331,7 @@ def mentor_signup(data: MentorSignupRequest):
 def mentor_login(data: MentorLoginRequest):
     db = SessionLocal()
     try:
-        mentor = db.query(Mentor).filter(Mentor.username == data.username).first()
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.username.strip().lower()).first()
         if not mentor or not pbkdf2_sha256.verify(data.password, mentor.password):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         return {
@@ -371,6 +385,91 @@ def get_students():
                 "team_name": team_name,
                 "project_name": project_name,
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1"
+            })
+        return result
+    finally:
+        db.close()
+
+
+@app.post("/mentor/students/import")
+async def import_mentor_students(mentor_user: str = Form(...), file: UploadFile = File(...)):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Upload an .xlsx Excel file.")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="The Excel file must be 5 MB or smaller.")
+
+    db = SessionLocal()
+    try:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        try:
+            students = parse_mentor_roster(content, mentor.username)
+        except (ValueError, InvalidFileException, BadZipFile) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        added = 0
+        updated = 0
+        for row in students:
+            if row["prn"]:
+                existing = db.query(MentorStudent).filter(MentorStudent.prn == row["prn"]).first()
+            else:
+                existing = db.query(MentorStudent).filter(
+                    MentorStudent.mentor_key == row["mentor_key"],
+                    func.lower(MentorStudent.student_name) == row["student_name"].lower(),
+                ).first()
+            if existing:
+                updated += 1
+            else:
+                existing = MentorStudent()
+                db.add(existing)
+                added += 1
+            for field, value in row.items():
+                setattr(existing, field, value)
+        db.commit()
+        return {"added": added, "updated": updated, "total": len(students)}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@app.get("/mentor/students")
+def get_mentor_students(mentor_user: str):
+    db = SessionLocal()
+    try:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        roster = db.query(MentorStudent).filter(
+            MentorStudent.mentor_key == mentor_key(mentor.username)
+        ).order_by(MentorStudent.student_name).all()
+        result = []
+        for entry in roster:
+            team_name = entry.group_name or "No Group"
+            project_name = entry.project_name or "No Project"
+            if entry.prn:
+                member = db.query(TeamMember).filter(TeamMember.roll_no == entry.prn).first()
+                if member:
+                    team = db.query(Team).filter(Team.id == member.team_id).first()
+                    if team:
+                        team_name = team.team_name
+                        project = db.query(Project).filter(Project.team_name == team.team_name).first()
+                        if project:
+                            project_name = project.project_name
+            result.append({
+                "student_name": entry.student_name,
+                "prn": entry.prn or "",
+                "mentor_name": entry.mentor_name,
+                "year": entry.year or "",
+                "team_name": team_name,
+                "project_name": project_name,
+                "submissions": "1 / 1" if project_name != "No Project" else "0 / 1",
             })
         return result
     finally:

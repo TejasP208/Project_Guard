@@ -18,3 +18,8 @@ def migrate_database():
     if "team_name" not in project_columns:
         with engine.begin() as connection:
             connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN team_name VARCHAR")
+    if inspect(engine).has_table("mentor_students"):
+        roster_columns = {column["name"] for column in inspect(engine).get_columns("mentor_students")}
+        if "project_name" not in roster_columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql("ALTER TABLE mentor_students ADD COLUMN project_name VARCHAR")

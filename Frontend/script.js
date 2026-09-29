@@ -673,10 +673,11 @@ async function sendMessage() {
     // 🧑 User message
     const userWrapper = document.createElement('div');
     userWrapper.className = 'message-wrapper user-wrapper';
-    userWrapper.innerHTML = `
-        <div class="message-avatar"><i class="ph-fill ph-user"></i></div>
-        <div class="premium-glass-bubble">${message}</div>
-    `;
+    userWrapper.innerHTML = '<div class="message-avatar"><i class="ph-fill ph-user"></i></div>';
+    const userMessage = document.createElement('div');
+    userMessage.className = 'premium-glass-bubble';
+    userMessage.textContent = message;
+    userWrapper.appendChild(userMessage);
     chatBox.appendChild(userWrapper);
     input.value = "";
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -691,35 +692,60 @@ async function sendMessage() {
     `;
     
     const aiMessage = document.createElement("div");
-    aiMessage.className = "ai-message premium-glass-bubble";
+    aiMessage.className = "ai-message premium-glass-bubble streaming-cursor";
     aiWrapper.appendChild(aiMessage);
     chatBox.appendChild(aiWrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    let pendingText = "";
+    const wordDelayMs = 65;
+
+    async function revealCompleteWords() {
+        let match;
+        while ((match = pendingText.match(/^\s*\S+\s+/))) {
+            aiMessage.textContent += match[0];
+            pendingText = pendingText.slice(match[0].length);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            await new Promise(resolve => setTimeout(resolve, wordDelayMs));
+        }
+    }
 
     try {
         const res = await fetch(`http://127.0.0.1:8000/chat-stream?prompt=${encodeURIComponent(message)}`);
 
         // If backend fails
-        if (!res.ok) throw new Error("Server error");
+        if (!res.ok) {
+            const errText = await res.text().catch(() => "");
+            throw new Error(errText || "Server error");
+        }
 
+        if (!res.body) throw new Error("Streaming is unavailable in this browser");
         const reader = res.body.getReader();
-        const decoder = new TextDecoder();
+        const decoder = new TextDecoder("utf-8");
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            // 🔥 Append streaming text
-            aiMessage.textContent += decoder.decode(value);
-
-            // Auto scroll
-            chatBox.scrollTop = chatBox.scrollHeight;
+            pendingText += decoder.decode(value, { stream: true });
+            await revealCompleteWords();
+        }
+        pendingText += decoder.decode();
+        await revealCompleteWords();
+        aiMessage.textContent += pendingText;
+        pendingText = "";
+        chatBox.scrollTop = chatBox.scrollHeight;
+        if (!aiMessage.textContent.trim()) {
+            throw new Error("The AI service returned an empty response");
         }
 
     } catch (err) {
-        aiMessage.textContent = "Error connecting to the AI service. Please try again shortly.";
+        const errorText = "Error connecting to the AI service. Please make sure the backend is running and GROQ_API_KEY is configured.";
+        aiMessage.textContent += pendingText;
+        aiMessage.textContent += aiMessage.textContent ? `\n\n${errorText}` : errorText;
         console.error(err);
     } finally {
+        aiMessage.classList.remove("streaming-cursor");
         sendBtn.innerHTML = originalBtnHtml;
         sendBtn.disabled = false;
         input.focus();

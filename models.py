@@ -29,6 +29,19 @@ class Mentor(Base):
     password = Column(String)
 
 
+class MentorStudent(Base):
+    __tablename__ = "mentor_students"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mentor_name = Column(String, nullable=False)
+    mentor_key = Column(String, index=True, nullable=False)
+    student_name = Column(String, nullable=False)
+    prn = Column(String, nullable=True)
+    group_name = Column(String, nullable=True)
+    project_name = Column(String, nullable=True)
+    year = Column(String, nullable=True)
+
+
 # 🔥 Team table
 class Team(Base):
     __tablename__ = "teams"
