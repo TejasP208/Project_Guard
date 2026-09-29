@@ -1,7 +1,7 @@
-import sqlite3
 import os
 import sys
 import numpy as np
+from sqlalchemy import select
 
 _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if _project_root not in sys.path:
@@ -19,10 +19,8 @@ except ImportError:
     from nlp.lda_engine   import train_lda, compute_lda_similarity, get_topic_labels
 
 from Models.search import get_all_sbert_scores
-
-DB_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), '..', 'DB', 'training_data.db'
-))
+from database import SessionLocal
+from models import Project
 
 # Hybrid layer weights
 WEIGHT_TFIDF = 0.35
@@ -31,13 +29,26 @@ WEIGHT_SBERT = 0.40
 
 
 def load_training_projects() -> list:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT id, year, group_no, project_name, project_abstract FROM projects"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(
+                Project.id,
+                Project.year,
+                Project.group_no,
+                Project.project_name,
+                Project.project_abstract,
+            ).order_by(Project.id)
+        ).all()
+        return [
+            {
+                "id": row.id,
+                "year": row.year,
+                "group_no": row.group_no,
+                "project_name": row.project_name,
+                "project_abstract": row.project_abstract,
+            }
+            for row in rows
+        ]
 
 
 def determine_risk(score: float) -> str:

@@ -34,7 +34,8 @@ class Team(Base):
     __tablename__ = "teams"
 
     id = Column(Integer, primary_key=True)
-    team_name = Column(String, unique=True)
+    # Team names are not unique in existing project data; team_code is the identifier.
+    team_name = Column(String)
     password = Column(String)
     year = Column(String)
     mentor_name = Column(String)
