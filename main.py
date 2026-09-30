@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 from typing import Annotated
 from zipfile import BadZipFile
 
@@ -16,6 +17,7 @@ from database import SessionLocal, enable_pgvector, engine, migrate_database
 from mentor_roster import mentor_key, parse_mentor_roster
 from models import Base, Mentor, MentorStudent, Project, Student, Team, TeamMember
 from nlp.checker import run_plagiarism_check
+from nlp.extractor import DocumentExtractionError, DocumentLimitError, DocumentValidationError
 from passwords import hash_password, verify_password
 from utils import generate_team_code
 from embeddings import CloudflareEmbeddingClient
@@ -30,6 +32,9 @@ async def lifespan(_app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+logger = logging.getLogger(__name__)
+
+MAX_PLAGIARISM_UPLOAD_BYTES = 20 * 1024 * 1024
 
 # Middleware
 app.add_middleware(
@@ -311,22 +316,35 @@ def submit_project(data: ProjectSubmission):
 
 @app.post("/check-plagiarism")
 async def check_plagiarism(
-    file: Annotated[UploadFile, File()],
+    file: Annotated[UploadFile | None, File()] = None,
     title: Annotated[str, Form()] = "",
     description: Annotated[str, Form()] = "",
 ):
     try:
-        file_bytes = await file.read()
+        file_bytes = await file.read(MAX_PLAGIARISM_UPLOAD_BYTES + 1) if file else b""
+        if len(file_bytes) > MAX_PLAGIARISM_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="The uploaded file must be 20 MB or smaller.")
+        filename = (file.filename or "") if file else ""
         result = await run_in_threadpool(
-            run_plagiarism_check, title, description, file_bytes, file.filename or ""
+            run_plagiarism_check, title, description, file_bytes, filename
         )
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         return result
     except HTTPException:
         raise
+    except DocumentValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except DocumentExtractionError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except DocumentLimitError as e:
+        raise HTTPException(status_code=413, detail=str(e)) from e
     except Exception as e:  # noqa: BLE001 - translate document/parser failures to an API response
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unexpected failure while processing plagiarism upload")
+        raise HTTPException(
+            status_code=500,
+            detail="The uploaded document could not be processed. Check the file and try again.",
+        ) from e
 
 # ── Mentor Endpoints ──────────────────────────────────────────────
 

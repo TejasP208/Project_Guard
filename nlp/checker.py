@@ -21,7 +21,7 @@ except ImportError:
     from nlp.tfidf_engine import compute_tfidf_similarity
 
 from database import SessionLocal, engine
-from embeddings.chunking import chunk_document
+from embeddings.chunking import chunk_document, text_for_document_scoring
 from embeddings.project_vectors import best_similarities_for_texts
 from models import Project
 
@@ -74,8 +74,19 @@ def run_plagiarism_check(
     title: str, description: str, file_bytes: bytes, filename: str
 ) -> dict[str, object]:
     # Extract and combine all text
-    file_text = extract_text(file_bytes, filename)
-    full_text = f"{title} {description} {file_text}".strip()
+    file_text = extract_text(file_bytes, filename) if file_bytes else ""
+    scoring_file_text, document_text_truncated = text_for_document_scoring(file_text)
+    try:
+        # Apply the same document limits and scoring prefix before every model,
+        # so lexical and semantic scoring inspect the same extracted content.
+        document_chunks = chunk_document(scoring_file_text)
+        summary_texts = chunk_document(
+            f"{title}. {description}".strip(), enforce_document_limits=False
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+    full_text = f"{title} {description} {scoring_file_text}".strip()
 
     new_clean = preprocess(full_text)
     if not new_clean.strip():
@@ -105,12 +116,7 @@ def run_plagiarism_check(
     if engine.dialect.name == "postgresql":
         # Compare both the project summary and every extracted document chunk.
         print("[Checker] Running Qwen/pgvector layer...")
-        try:
-            summary = f"{title}. {description}" if title.strip() or description.strip() else ""
-            query_texts = chunk_document(summary)
-            query_texts.extend(chunk_document(file_text))
-        except ValueError as exc:
-            return {"error": str(exc)}
+        query_texts = summary_texts + document_chunks
         qwen_map = best_similarities_for_texts(query_texts)
         missing = [p["id"] for p in projects if p["id"] not in qwen_map]
         if missing:
@@ -182,6 +188,9 @@ def run_plagiarism_check(
         result["embedding_chunk_count"] = len(query_texts)
     else:
         result["lda_score"] = round(lda_scores[best_i] * 100, 2)
+    if document_text_truncated:
+        result["document_text_truncated"] = True
+        result["document_text_used_characters"] = len(scoring_file_text)
     return result
 
 
