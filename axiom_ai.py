@@ -1,21 +1,34 @@
 import os
-
+from pathlib import Path
 from dotenv import load_dotenv
-from groq import Groq
+from groq import AsyncGroq, Groq
 
-load_dotenv()
+# Ensure .env from Project_Guard directory is loaded
+env_file = Path(__file__).resolve().parent / ".env"
+if env_file.exists():
+    load_dotenv(dotenv_path=env_file, override=True)
+else:
+    load_dotenv()
 
+_async_groq_client = None
 _groq_client = None
 
 
-def _get_groq_client():
-    global _groq_client
-    api_key = os.getenv("API_key")
-    if not api_key:
-        raise RuntimeError("Groq API key is missing. Set GROQ_API_KEY in the environment or .env file.")
-    if _groq_client is None:
-        _groq_client = Groq(api_key=api_key)
-    return _groq_client
+def _get_api_key() -> str:
+    for key in ["GROQ_API_KEY", "API_key", "API_KEY", "api_key", "API_key "]:
+        val = os.getenv(key)
+        if val and val.strip():
+            return val.strip()
+    raise RuntimeError("Groq API key is missing. Set GROQ_API_KEY in the environment or .env file.")
+
+
+def _get_async_groq_client() -> AsyncGroq:
+    global _async_groq_client
+    api_key = _get_api_key()
+    if _async_groq_client is None:
+        _async_groq_client = AsyncGroq(api_key=api_key)
+    return _async_groq_client
+
 
 SYSTEM_PROMPT = """
 You are Axiom AI, an intelligent Project Finder and Academic Assistant for students.
@@ -45,15 +58,19 @@ Also consider the past history of the chat.
 do consider the project title and project absract and project ppt
 """
 
-def Chatbot_stream(prompt: str):
-    stream = _get_groq_client().chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+
+async def Chatbot_stream(prompt: str):
+    client = _get_async_groq_client()
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    stream = await client.chat.completions.create(
+        model=model,
         messages=[
-             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}],
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ],
         stream=True,
     )
-    for chunk in stream:
+    async for chunk in stream:
         content = chunk.choices[0].delta.content
         if content:
             yield content

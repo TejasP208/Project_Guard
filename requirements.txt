@@ -7,6 +7,7 @@ python-docx
 scipy
 pandas
 python-dotenv
+openpyxl
 groq
 fastapi
 uvicorn

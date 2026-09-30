@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 // Store mentor session
-                localStorage.setItem('mentorUser', username);
+                localStorage.setItem('mentorUser', data.username);
                 window.location.href = 'mentor_index.html';
             } else {
                 alert(data.detail || 'Login failed');

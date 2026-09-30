@@ -241,16 +241,16 @@
                 <div class="glass-card student-upload-card">
                     <div class="upload-card-header">
                         <h3><i class="ph ph-upload-simple"></i> Import Students</h3>
-                        <span class="upload-hint">Upload a file to bulk-add students</span>
+                        <span class="upload-hint">Excel columns: Student Name, Mentor Name, PRN (optional), Group (optional)</span>
                     </div>
                     <label for="upload-students-file" class="student-drop-zone" id="student-drop-zone">
-                        <input type="file" id="upload-students-file" accept=".xlsx,.xls,.docx,.pdf" hidden />
+                        <input type="file" id="upload-students-file" accept=".xlsx" hidden />
                         <div class="upload-icon-wrapper">
                             <i class="ph ph-cloud-arrow-up"></i>
                         </div>
                         <h3>Drag & drop your file here</h3>
                         <p>or <span class="browse-link">browse</span> to choose a file</p>
-                        <span class="file-formats">.xlsx &nbsp; .xls &nbsp; .docx &nbsp; .pdf</span>
+                        <span class="file-formats">.xlsx Excel files only</span>
                     </label>
                     <div class="upload-file-preview hidden" id="upload-file-preview">
                         <div class="file-details">
@@ -264,11 +264,12 @@
                     <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
                         <i class="ph ph-user-plus"></i> Add Students
                     </button>
+                    <p id="student-import-status" role="status" aria-live="polite"></p>
                 </div>
 
                 <div class="glass-card mentor-table-card">
                     <div class="table-header-bar">
-                        <h3><i class="ph ph-users"></i> All Students</h3>
+                        <h3><i class="ph ph-users"></i> My Students</h3>
                         <div class="table-search">
                             <i class="ph ph-magnifying-glass"></i>
                             <input type="text" placeholder="Search students..." id="student-search">
@@ -280,83 +281,18 @@
                                 <tr>
                                     <th>Student Name</th>
                                     <th>PRN</th>
+                                    <th>Mentor</th>
                                     <th>Group</th>
                                     <th>Project</th>
                                     <th>Submissions</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Ravi Kumar
-                                    </td>
-                                    <td>PRN2024001</td>
-                                    <td>Group A</td>
-                                    <td>AI-Based Plagiarism Detector</td>
-                                    <td><span class="chip verified">3 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Priya Sharma
-                                    </td>
-                                    <td>PRN2024002</td>
-                                    <td>Group A</td>
-                                    <td>AI-Based Plagiarism Detector</td>
-                                    <td><span class="chip checking">2 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Anika Patel
-                                    </td>
-                                    <td>PRN2024003</td>
-                                    <td>Group B</td>
-                                    <td>Smart Attendance System</td>
-                                    <td><span class="chip verified">3 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Rohan Mehta
-                                    </td>
-                                    <td>PRN2024004</td>
-                                    <td>Group B</td>
-                                    <td>Smart Attendance System</td>
-                                    <td><span class="chip pending">1 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Meera Joshi
-                                    </td>
-                                    <td>PRN2024005</td>
-                                    <td>Group C</td>
-                                    <td>E-Commerce Platform</td>
-                                    <td><span class="chip pending">0 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="student-name-cell">
-                                        <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                        Karan Singh
-                                    </td>
-                                    <td>PRN2024006</td>
-                                    <td>Group C</td>
-                                    <td>E-Commerce Platform</td>
-                                    <td><span class="chip checking">2 / 3</span></td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                </tr>
-                            </tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
+            </div>
             <!-- View: Group Connect (Group Specific Chat & Meet Room) -->
             <div id="view-group-connect" class="content-view hidden">
                 <div class="group-connect-layout">
@@ -688,48 +624,46 @@
             // ============================================
             // Load Students from API
             // ============================================
+            const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[char]);
+
             async function loadStudents() {
                 const tbody = document.querySelector('#view-student-list .mentor-table tbody');
                 if (!tbody) return;
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading students...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading students...</td></tr>';
 
                 try {
-                    const response = await fetch('http://localhost:8000/api/students');
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
                     if (!response.ok) throw new Error('Failed to fetch');
                     const students = await response.json();
 
                     if (students.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students registered yet.</td></tr>';
-                        return;
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students assigned to you yet. Upload an Excel sheet to add them.</td></tr>';
+                    } else {
+                        tbody.innerHTML = students.map(s => `
+                            <tr>
+                                <td class="student-name-cell">
+                                    <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
+                                    <div><strong>${escapeHtml(s.student_name)}</strong>${s.year ? `<small> ${escapeHtml(s.year)}</small>` : ''}</div>
+                                </td>
+                                <td>${escapeHtml(s.prn || '—')}</td>
+                                <td>${escapeHtml(s.mentor_name)}</td>
+                                <td>${escapeHtml(s.team_name)}</td>
+                                <td>${escapeHtml(s.project_name)}</td>
+                                <td><span class="chip ${s.submissions === '0 / 1' ? 'pending' : 'verified'}">${escapeHtml(s.submissions)}</span></td>
+                                <td><button class="btn-table-action" type="button" title="View student"><i class="ph ph-eye"></i> View</button></td>
+                            </tr>
+                        `).join('');
                     }
-
-                    tbody.innerHTML = students.map(s => `
-                        <tr>
-                            <td class="student-name">
-                                <div class="avatar-small"><i class="ph-fill ph-student"></i></div>
-                                <div>
-                                    <div style="font-weight:600; color:var(--text-main);">${s.roll_no}</div>
-                                    <div style="font-size:0.75rem; color:var(--text-muted);">${s.year}</div>
-                                </div>
-                            </td>
-                            <td>${s.team_name}</td>
-                            <td>${s.project_name}</td>
-                            <td>${s.submissions}</td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn-icon" title="View Profile"><i class="ph ph-user"></i></button>
-                                    <button class="btn-icon" title="Message"><i class="ph ph-chat-teardrop"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('');
 
                     // Update dashboard stat
                     const statCards = document.querySelectorAll('.mentor-stat-card .stat-value');
                     if (statCards[0]) statCards[0].textContent = students.length;
+                    document.getElementById('student-search').dispatchEvent(new Event('input'));
                 } catch (error) {
                     console.error('Error loading students:', error);
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load students. Ensure backend is running.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load students. Ensure backend is running.</td></tr>';
                 }
             }
 
@@ -997,6 +931,7 @@
             const fileNameSpan = document.getElementById('upload-file-name');
             const removeBtn = document.getElementById('remove-upload-file');
             const addStudentsBtn = document.getElementById('add-students-btn');
+            const importStatus = document.getElementById('student-import-status');
 
             if (dropZone && fileInput) {
                 // Drag events
@@ -1027,15 +962,47 @@
                         filePreview.classList.add('hidden');
                         dropZone.style.display = '';
                         addStudentsBtn.disabled = true;
+                        importStatus.textContent = '';
                     });
                 }
 
                 function showFilePreview(file) {
+                    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+                        importStatus.textContent = 'Choose an .xlsx Excel file.';
+                        addStudentsBtn.disabled = true;
+                        return;
+                    }
                     fileNameSpan.textContent = file.name;
                     filePreview.classList.remove('hidden');
                     dropZone.style.display = 'none';
                     addStudentsBtn.disabled = false;
+                    importStatus.textContent = '';
                 }
+
+                addStudentsBtn.addEventListener('click', async () => {
+                    const file = fileInput.files[0];
+                    if (!file) return;
+                    const form = new FormData();
+                    form.append('mentor_user', mentorUser);
+                    form.append('file', file);
+                    addStudentsBtn.disabled = true;
+                    importStatus.textContent = 'Importing students...';
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/mentor/students/import', {
+                            method: 'POST', body: form
+                        });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.detail || 'Import failed.');
+                        importStatus.textContent = `Imported ${result.added} students; updated ${result.updated}. The list now shows students assigned to ${mentorUser}.`;
+                        fileInput.value = '';
+                        filePreview.classList.add('hidden');
+                        dropZone.style.display = '';
+                        await loadStudents();
+                    } catch (error) {
+                        importStatus.textContent = error.message || 'Could not import students.';
+                        addStudentsBtn.disabled = false;
+                    }
+                });
             }
         });
     </script>
