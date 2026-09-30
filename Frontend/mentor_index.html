@@ -69,8 +69,9 @@
                     <p class="page-subtitle" id="main-subtitle">Overview of your assigned student groups</p>
                 </div>
                 <!-- Optional notification icon -->
-                <button class="icon-btn glass-btn">
+                <button class="icon-btn glass-btn" id="mentor-notification-btn" type="button" title="Show pending reviews" style="position:relative;">
                     <i class="ph ph-bell"></i>
+                    <span id="mentor-notification-count" hidden style="position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--status-pending);color:white;font-size:11px;font-weight:700;line-height:18px;"></span>
                 </button>
             </header>
 
@@ -83,7 +84,7 @@
                             <i class="ph ph-users-three"></i>
                         </div>
                         <div class="stat-info">
-                            <span class="stat-value">12</span>
+                            <span class="stat-value" id="dashboard-students">—</span>
                             <span class="stat-label">Assigned Students</span>
                         </div>
                     </div>
@@ -92,7 +93,7 @@
                             <i class="ph ph-folder-open"></i>
                         </div>
                         <div class="stat-info">
-                            <span class="stat-value">8</span>
+                            <span class="stat-value" id="dashboard-projects">—</span>
                             <span class="stat-label">Active Projects</span>
                         </div>
                     </div>
@@ -101,7 +102,7 @@
                             <i class="ph ph-clock-countdown"></i>
                         </div>
                         <div class="stat-info">
-                            <span class="stat-value">3</span>
+                            <span class="stat-value" id="dashboard-pending">—</span>
                             <span class="stat-label">Pending Reviews</span>
                         </div>
                     </div>
@@ -110,7 +111,7 @@
                             <i class="ph ph-calendar-check"></i>
                         </div>
                         <div class="stat-info">
-                            <span class="stat-value">5</span>
+                            <span class="stat-value" id="dashboard-completed">—</span>
                             <span class="stat-label">Reviews Done</span>
                         </div>
                     </div>
@@ -128,35 +129,8 @@
                 <!-- Recent Activity -->
                 <div class="glass-card mentor-activity-card">
                     <h3 class="activity-title"><i class="ph ph-clock-counter-clockwise"></i> Recent Activity</h3>
-                    <div class="activity-list">
-                        <div class="activity-item">
-                            <div class="activity-dot" style="background: var(--status-verified);"></div>
-                            <div class="activity-content">
-                                <span class="activity-text"><strong>Ravi Kumar</strong> submitted project report</span>
-                                <span class="activity-time">2 hours ago</span>
-                            </div>
-                        </div>
-                        <div class="activity-item">
-                            <div class="activity-dot" style="background: var(--status-pending);"></div>
-                            <div class="activity-content">
-                                <span class="activity-text"><strong>Priya Sharma</strong> requested feedback on draft</span>
-                                <span class="activity-time">5 hours ago</span>
-                            </div>
-                        </div>
-                        <div class="activity-item">
-                            <div class="activity-dot" style="background: var(--status-checking);"></div>
-                            <div class="activity-content">
-                                <span class="activity-text"><strong>Group B</strong> review completed</span>
-                                <span class="activity-time">Yesterday</span>
-                            </div>
-                        </div>
-                        <div class="activity-item">
-                            <div class="activity-dot" style="background: var(--primary);"></div>
-                            <div class="activity-content">
-                                <span class="activity-text"><strong>Anika Patel</strong> uploaded plagiarism check</span>
-                                <span class="activity-time">2 days ago</span>
-                            </div>
-                        </div>
+                    <div class="activity-list" id="dashboard-activity" aria-live="polite">
+                        <div class="activity-item"><div class="activity-content"><span class="activity-time"><i class="ph ph-spinner-gap ph-spin"></i> Loading dashboard…</span></div></div>
                     </div>
                 </div>
             </div>
@@ -265,6 +239,9 @@
                         <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
                             <i class="ph ph-user-plus"></i> Add Students
                         </button>
+                        <button id="add-manual-student-btn" class="btn btn-secondary upload-submit-btn" type="button">
+                            <i class="ph ph-pencil-simple"></i> Add Manually
+                        </button>
                         <div id="student-import-status" class="student-import-status hidden" role="status" aria-live="polite"></div>
                     </div>
                 </div>
@@ -360,7 +337,12 @@
                 </button>
             </div>
             <form class="modal-form" id="review-form">
-
+                <div class="form-group">
+                    <label for="review-group">Student Group</label>
+                    <select id="review-group" class="modal-select" required>
+                        <option value="" disabled selected>Select assigned group</option>
+                    </select>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="review-date">Date</label>
@@ -373,11 +355,11 @@
                 </div>
                 <div class="form-group">
                     <label for="review-type">Review Type</label>
-                    <select id="review-type" class="modal-select">
+                    <select id="review-type" class="modal-select" required>
                         <option value="" disabled selected>Select review type</option>
-                        <option value="progress">Progress Review-1</option>
-                        <option value="mid-term">Progress Review-2</option>
-                        <option value="final">Final Presentation</option>
+                        <option value="Progress Review-1">Progress Review-1</option>
+                        <option value="Progress Review-2">Progress Review-2</option>
+                        <option value="Final Presentation">Final Presentation</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -391,6 +373,25 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Axiom AI Project Assistant -->
+    <div class="review-modal-overlay" id="axiom-project-modal">
+        <div class="review-modal glass-card axiom-project-modal">
+            <div class="modal-header">
+                <div>
+                    <h2><i class="ph ph-sparkle"></i> Ask Axiom AI</h2>
+                    <p id="axiom-project-context" class="axiom-project-context"></p>
+                </div>
+                <button class="modal-close-btn" id="axiom-modal-close" type="button" aria-label="Close Axiom AI"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="axiom-chat-stream" id="axiom-chat-stream" aria-live="polite"></div>
+            <form class="axiom-chat-form" id="axiom-chat-form">
+                <input class="modal-input" id="axiom-chat-input" autocomplete="off" placeholder="Ask about originality, scope, risks, or improvements…" required>
+                <button class="btn btn-primary" id="axiom-chat-send" type="submit"><i class="ph ph-paper-plane-tilt"></i> Send</button>
+            </form>
+            <p class="axiom-chat-error" id="axiom-chat-error" role="alert"></p>
         </div>
     </div>
 
@@ -449,6 +450,7 @@
                 <div class="form-group"><label for="roster-student-year">Year</label><input class="modal-input" id="roster-student-year"></div>
                 <p id="student-roster-error" class="student-roster-error" role="alert"></p>
                 <div class="modal-actions">
+                    <span id="review-form-error" class="student-roster-error" role="alert"></span>
                     <button type="button" class="btn btn-secondary" id="student-roster-cancel">Close</button>
                     <button type="submit" class="btn btn-primary" id="student-roster-save"><i class="ph ph-check"></i> Save Changes</button>
                 </div>
@@ -596,6 +598,9 @@
                 if (navId === 'nav-group-connect') {
                     loadAssignedGroups();
                 }
+                if (navId === 'nav-dashboard') {
+                    loadDashboard();
+                }
             }
 
             // Attach click listeners
@@ -612,6 +617,7 @@
             // ============================================
             // Load Projects from API
             // ============================================
+            let projectCatalog = new Map();
             async function loadProjects() {
                 const tbody = document.querySelector('#view-project-list .mentor-table tbody');
                 if (!tbody) return;
@@ -621,6 +627,7 @@
                     const response = await fetch('http://localhost:8000/api/projects');
                     if (!response.ok) throw new Error('Failed to fetch');
                     const projects = await response.json();
+                    projectCatalog = new Map(projects.map(project => [String(project.id), project]));
 
                     if (projects.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No projects submitted yet.</td></tr>';
@@ -629,19 +636,16 @@
 
                     tbody.innerHTML = projects.map(p => `
                         <tr>
-                            <td class="project-name">${p.project_name || 'Untitled'}</td>
-                            <td>Group ${p.group_no || '--'}</td>
-                            <td>${p.team || 'N/A'}</td>
+                            <td class="project-name">${escapeHtml(p.project_name || 'Untitled')}</td>
+                            <td>Group ${escapeHtml(p.group_no || '--')}</td>
+                            <td>${escapeHtml(p.team || 'N/A')}</td>
                             <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Submitted</span></td>
-                            <td>${p.year || 'N/A'}</td>
+                            <td>${escapeHtml(p.year || 'N/A')}</td>
                             <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                            <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                            <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(p.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
                         </tr>
                     `).join('');
 
-                    // Update dashboard stat
-                    const statCards = document.querySelectorAll('.mentor-stat-card .stat-value');
-                    if (statCards[1]) statCards[1].textContent = projects.length;
                 } catch (error) {
                     console.error('Error loading projects:', error);
                     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load projects. Ensure backend is running.</td></tr>';
@@ -654,6 +658,122 @@
             const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[char]);
+            const axiomModal = document.getElementById('axiom-project-modal');
+            const axiomStream = document.getElementById('axiom-chat-stream');
+            const axiomInput = document.getElementById('axiom-chat-input');
+            const axiomSend = document.getElementById('axiom-chat-send');
+            const axiomError = document.getElementById('axiom-chat-error');
+            let selectedAxiomProject = null;
+            let axiomHistory = [];
+            let axiomRequestController = null;
+
+            function appendAxiomMessage(role, text = '') {
+                const message = document.createElement('div');
+                message.className = `axiom-chat-message ${role}`;
+                message.textContent = text;
+                axiomStream.appendChild(message);
+                axiomStream.scrollTop = axiomStream.scrollHeight;
+                return message;
+            }
+
+            function openAxiomProject(project) {
+                selectedAxiomProject = project;
+                axiomHistory = [];
+                axiomError.textContent = '';
+                document.getElementById('axiom-project-context').textContent = `${project.project_name || 'Untitled'} · Group ${project.group_no || '—'}`;
+                axiomStream.innerHTML = '';
+                appendAxiomMessage('assistant', `I’m ready to help review “${project.project_name || 'this project'}”. Ask about originality, technical scope, risks, presentation, or improvements.`);
+                axiomModal.classList.add('active');
+                setTimeout(() => axiomInput.focus(), 100);
+            }
+
+            function closeAxiomProject() {
+                if (axiomRequestController) axiomRequestController.abort();
+                axiomRequestController = null;
+                axiomModal.classList.remove('active');
+            }
+
+            document.querySelector('#view-project-list .mentor-table tbody').addEventListener('click', event => {
+                const button = event.target.closest('.btn-axiom-ai[data-project-id]');
+                if (!button) return;
+                const project = projectCatalog.get(button.dataset.projectId);
+                if (project) openAxiomProject(project);
+            });
+            document.getElementById('axiom-modal-close').addEventListener('click', closeAxiomProject);
+            axiomModal.addEventListener('click', event => { if (event.target === axiomModal) closeAxiomProject(); });
+
+            document.getElementById('axiom-chat-form').addEventListener('submit', async event => {
+                event.preventDefault();
+                const question = axiomInput.value.trim();
+                if (!question || !selectedAxiomProject || axiomRequestController) return;
+                axiomInput.value = '';
+                axiomError.textContent = '';
+                appendAxiomMessage('user', question);
+                const reply = appendAxiomMessage('assistant');
+                reply.classList.add('streaming');
+                axiomSend.disabled = true;
+                axiomInput.disabled = true;
+                axiomRequestController = new AbortController();
+                let pendingText = '';
+                const revealWords = async force => {
+                    let match;
+                    while ((match = pendingText.match(/^\s*\S+\s+/))) {
+                        reply.textContent += match[0];
+                        pendingText = pendingText.slice(match[0].length);
+                        axiomStream.scrollTop = axiomStream.scrollHeight;
+                        await new Promise(resolve => setTimeout(resolve, 45));
+                    }
+                    if (force && pendingText) {
+                        reply.textContent += pendingText;
+                        pendingText = '';
+                    }
+                };
+                try {
+                    const response = await fetch('http://127.0.0.1:8000/mentor/axiom-stream', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        signal: axiomRequestController.signal,
+                        body: JSON.stringify({
+                            question,
+                            project_title: selectedAxiomProject.project_name || 'Untitled project',
+                            project_abstract: selectedAxiomProject.project_abstract || '',
+                            group_name: String(selectedAxiomProject.group_no || ''),
+                            year: selectedAxiomProject.year || '',
+                            history: axiomHistory.slice(-8)
+                        })
+                    });
+                    if (!response.ok) {
+                        const detail = await response.json().catch(() => ({}));
+                        throw new Error(detail.detail || 'Axiom AI could not answer this question.');
+                    }
+                    if (!response.body) throw new Error('Streaming is unavailable in this browser.');
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        pendingText += decoder.decode(value, { stream: true });
+                        await revealWords(false);
+                    }
+                    pendingText += decoder.decode();
+                    await revealWords(true);
+                    if (!reply.textContent.trim()) throw new Error('Axiom AI returned an empty response.');
+                    axiomHistory.push({ role: 'user', content: question }, { role: 'assistant', content: reply.textContent });
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        reply.remove();
+                        axiomError.textContent = error.message.includes('Failed to fetch')
+                            ? 'Could not reach Axiom AI. Check that the backend is running and GROQ_API_KEY is configured.'
+                            : error.message;
+                    }
+                } finally {
+                    reply.classList.remove('streaming');
+                    axiomRequestController = null;
+                    axiomSend.disabled = false;
+                    axiomInput.disabled = false;
+                    axiomInput.focus();
+                }
+            });
             let rosterStudents = [];
 
             async function loadStudents() {
@@ -666,6 +786,7 @@
                     if (!response.ok) throw new Error('Failed to fetch');
                     const students = await response.json();
                     rosterStudents = students;
+                    populateReviewGroups();
 
                     if (students.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students assigned to you yet. Upload an Excel sheet to add them.</td></tr>';
@@ -712,9 +833,7 @@
                         `).join('') + '<tr class="student-no-match" hidden><td colspan="7">No students match your search.</td></tr>';
                     }
 
-                    // Update dashboard stat
-                    const statCards = document.querySelectorAll('.mentor-stat-card .stat-value');
-                    if (statCards[0]) statCards[0].textContent = students.length;
+                    document.getElementById('dashboard-students').textContent = students.length;
                     document.getElementById('student-search').dispatchEvent(new Event('input'));
                 } catch (error) {
                     console.error('Error loading students:', error);
@@ -735,25 +854,44 @@
                 year: document.getElementById('roster-student-year')
             };
             let selectedRosterId = null;
+            let rosterMode = 'view';
 
             function closeRosterModal() {
                 rosterModal.classList.remove('active');
                 selectedRosterId = null;
+                rosterMode = 'view';
                 rosterError.textContent = '';
             }
 
             function openRosterModal(student, editable) {
                 selectedRosterId = student.id;
+                rosterMode = editable ? 'edit' : 'view';
                 Object.entries(rosterFields).forEach(([key, field]) => {
                     field.value = student[key] === 'No Project' ? '' : (student[key] || '');
                     field.disabled = !editable;
                 });
                 document.getElementById('student-roster-modal-title').textContent = editable ? 'Edit Student' : 'Student Details';
                 rosterSave.style.display = editable ? '' : 'none';
+                rosterSave.textContent = 'Save Changes';
                 rosterError.textContent = '';
                 rosterModal.classList.add('active');
                 if (editable) rosterFields.student_name.focus();
             }
+
+            document.getElementById('add-manual-student-btn').addEventListener('click', () => {
+                selectedRosterId = null;
+                rosterMode = 'create';
+                Object.values(rosterFields).forEach(field => {
+                    field.value = '';
+                    field.disabled = false;
+                });
+                document.getElementById('student-roster-modal-title').textContent = 'Add Student Manually';
+                rosterSave.style.display = '';
+                rosterSave.textContent = 'Add Student';
+                rosterError.textContent = '';
+                rosterModal.classList.add('active');
+                rosterFields.student_name.focus();
+            });
 
             document.getElementById('student-roster-close').addEventListener('click', closeRosterModal);
             document.getElementById('student-roster-cancel').addEventListener('click', closeRosterModal);
@@ -786,24 +924,50 @@
                     button.disabled = false;
                 }
             });
+            document.getElementById('mentor-notification-btn').addEventListener('click', () => {
+                switchView('nav-dashboard');
+                document.querySelector('.mentor-activity-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
 
             rosterForm.addEventListener('submit', async event => {
                 event.preventDefault();
-                if (selectedRosterId === null) return;
+                if (rosterMode !== 'create' && rosterMode !== 'edit') return;
                 rosterSave.disabled = true;
                 rosterError.textContent = '';
                 const data = { mentor_user: mentorUser };
                 Object.entries(rosterFields).forEach(([key, field]) => { data[key] = field.value.trim(); });
                 try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/students/${selectedRosterId}`, {
-                        method: 'PUT',
+                    const isCreate = rosterMode === 'create';
+                    const url = isCreate
+                        ? 'http://127.0.0.1:8000/mentor/students'
+                        : `http://127.0.0.1:8000/mentor/students/${selectedRosterId}`;
+                    let response = await fetch(url, {
+                        method: isCreate ? 'POST' : 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
-                    const result = await response.json();
-                    if (!response.ok) throw new Error(result.detail || 'Could not update student.');
+                    let result = await response.json();
+                    if (isCreate && response.status === 409 && result.detail?.code === 'PRN_ASSIGNED') {
+                        const existing = result.detail;
+                        const currentGroup = existing.group_number ? `Group ${existing.group_number}` : 'no group';
+                        const newGroup = data.group_number ? `Group ${data.group_number}` : 'no group';
+                        const confirmed = window.confirm(
+                            `PRN ${data.prn} already belongs to ${existing.student_name} under ${existing.mentor_name} (${currentGroup}).\n\n` +
+                            `Move this student to ${mentorUser} (${newGroup}) and set the name to ${data.student_name}?`
+                        );
+                        if (!confirmed) return;
+                        response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...data, transfer_existing: true })
+                        });
+                        result = await response.json();
+                    }
+                    if (!response.ok) {
+                        throw new Error(typeof result.detail === 'string' ? result.detail : `Could not ${isCreate ? 'add' : 'update'} student.`);
+                    }
                     closeRosterModal();
-                    document.getElementById('student-list-feedback').textContent = `${data.student_name} was updated.`;
+                    document.getElementById('student-list-feedback').textContent = `${data.student_name} was ${result.transferred ? 'moved to your roster' : isCreate ? 'added to your roster' : 'updated'}.`;
                     await Promise.all([loadStudents(), loadAssignedGroups()]);
                 } catch (error) {
                     rosterError.textContent = error.message;
@@ -847,25 +1011,113 @@
                 if (noMatch) noMatch.hidden = visibleTotal > 0;
             });
 
+            function populateReviewGroups() {
+                const select = document.getElementById('review-group');
+                const current = select.value;
+                const groups = [...new Set(rosterStudents.map(student => String(student.group_number || '').trim()).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                select.innerHTML = '<option value="" disabled>Select assigned group</option>' + groups.map(group =>
+                    `<option value="${escapeHtml(group)}">Group ${escapeHtml(group)}</option>`
+                ).join('');
+                if (groups.includes(current)) select.value = current;
+                else if (groups.length === 1) select.value = groups[0];
+            }
+
+            function formatReviewDate(review) {
+                const value = new Date(`${review.review_date}T${review.review_time}`);
+                return Number.isNaN(value.getTime())
+                    ? `${review.review_date} ${review.review_time}`
+                    : value.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+            }
+
+            async function loadDashboard() {
+                const activity = document.getElementById('dashboard-activity');
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/dashboard?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.detail || 'Could not load dashboard.');
+                    document.getElementById('dashboard-students').textContent = data.assigned_students;
+                    document.getElementById('dashboard-projects').textContent = data.active_projects;
+                    document.getElementById('dashboard-pending').textContent = data.pending_reviews;
+                    document.getElementById('dashboard-completed').textContent = data.reviews_done;
+                    const notificationCount = document.getElementById('mentor-notification-count');
+                    notificationCount.textContent = data.pending_reviews;
+                    notificationCount.hidden = data.pending_reviews === 0;
+                    if (!data.reviews.length) {
+                        activity.innerHTML = '<div class="activity-item"><div class="activity-content"><span class="activity-text"><strong>No review activity yet.</strong> Schedule your first group review above.</span></div></div>';
+                        return;
+                    }
+                    activity.innerHTML = data.reviews.map(review => {
+                        const statusText = review.status === 'completed' ? 'Completed' : review.status === 'cancelled' ? 'Cancelled' : 'Scheduled';
+                        const color = review.status === 'completed' ? 'var(--status-verified)' : review.status === 'cancelled' ? 'var(--text-muted)' : 'var(--status-pending)';
+                        return `<div class="activity-item" data-review-id="${review.id}">
+                            <div class="activity-dot" style="background:${color};"></div>
+                            <div class="activity-content">
+                                <span class="activity-text"><strong>Group ${escapeHtml(review.group_number)}</strong> · ${escapeHtml(review.review_type)} <span class="chip ${review.status === 'completed' ? 'verified' : 'pending'}">${statusText}</span></span>
+                                <span class="activity-time">${escapeHtml(formatReviewDate(review))}${review.notes ? ` · ${escapeHtml(review.notes)}` : ''}</span>
+                            </div>
+                            ${review.status === 'scheduled' ? `<div class="student-row-actions">
+                                <button class="btn-table-action" type="button" data-review-action="completed"><i class="ph ph-check"></i> Complete</button>
+                                <button class="btn-table-action student-delete-action" type="button" data-review-action="cancelled"><i class="ph ph-x"></i> Cancel</button>
+                            </div>` : ''}
+                        </div>`;
+                    }).join('');
+                } catch (error) {
+                    activity.innerHTML = `<div class="activity-item"><div class="activity-content"><span class="activity-text" style="color:var(--status-pending);">${escapeHtml(error.message)}</span></div></div>`;
+                }
+            }
+
+            document.getElementById('dashboard-activity').addEventListener('click', async event => {
+                const button = event.target.closest('[data-review-action]');
+                if (!button) return;
+                const item = button.closest('[data-review-id]');
+                button.disabled = true;
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/reviews/${item.dataset.reviewId}`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mentor_user: mentorUser, status: button.dataset.reviewAction })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || 'Could not update review.');
+                    await loadDashboard();
+                } catch (error) {
+                    button.disabled = false;
+                    alert(error.message);
+                }
+            });
+
             // Schedule Review Modal Logic
-            document.getElementById('review-form').addEventListener('submit', function(e) {
+            document.getElementById('review-form').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const btn = document.getElementById('btn-confirm-review');
+                const errorEl = document.getElementById('review-form-error');
+                errorEl.textContent = '';
                 btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i> Scheduling...';
                 btn.disabled = true;
-
-                setTimeout(() => {
-                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Scheduled!';
-                    btn.style.background = 'var(--status-verified)';
-                    
-                    setTimeout(() => {
-                        document.getElementById('review-modal').classList.remove('active');
-                        document.getElementById('review-form').reset();
-                        btn.innerHTML = '<i class="ph ph-check-circle"></i> Confirm Schedule';
-                        btn.style.background = '';
-                        btn.disabled = false;
-                    }, 1000);
-                }, 1200);
+                try {
+                    const response = await fetch('http://127.0.0.1:8000/mentor/reviews', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mentor_user: mentorUser,
+                            group_number: document.getElementById('review-group').value,
+                            review_type: document.getElementById('review-type').value,
+                            review_date: document.getElementById('review-date').value,
+                            review_time: document.getElementById('review-time').value,
+                            notes: document.getElementById('review-notes').value
+                        })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || 'Could not schedule review.');
+                    document.getElementById('review-modal').classList.remove('active');
+                    document.getElementById('review-form').reset();
+                    populateReviewGroups();
+                    await loadDashboard();
+                } catch (error) {
+                    errorEl.textContent = error.message;
+                } finally {
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Confirm Schedule';
+                    btn.disabled = false;
+                }
             });
 
             // Close modal on overlay click
@@ -875,7 +1127,10 @@
 
             // Close modal on Escape key
             document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') document.getElementById('review-modal').classList.remove('active');
+                if (e.key === 'Escape') {
+                    document.getElementById('review-modal').classList.remove('active');
+                    if (axiomModal.classList.contains('active')) closeAxiomProject();
+                }
             });
 
             // ============================================
@@ -1098,6 +1353,8 @@
             loadAssignedGroups();
             loadProjects();
             loadStudents();
+            loadDashboard();
+            document.getElementById('review-date').min = new Date().toISOString().slice(0, 10);
 
             // --- Student Upload Card Interactions ---
             const dropZone = document.getElementById('student-drop-zone');

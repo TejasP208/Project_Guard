@@ -453,6 +453,38 @@
         </main>
     </div>
 
+    <!-- Team invitation modal -->
+    <div class="review-modal-overlay" id="team-invite-modal">
+        <div class="review-modal glass-card" style="max-width:460px;">
+            <div class="modal-header">
+                <h2><i class="ph ph-user-plus"></i> Invite a Team Member</h2>
+                <button class="modal-close-btn" id="team-invite-close" type="button"><i class="ph ph-x"></i></button>
+            </div>
+            <form class="modal-form" id="team-invite-form">
+                <div class="form-group">
+                    <label for="team-invite-roll">Student PRN / Roll Number</label>
+                    <input class="modal-input" id="team-invite-roll" autocomplete="off" placeholder="e.g., 124A9003" required>
+                </div>
+                <p id="team-invite-feedback" class="team-invite-feedback" role="status"></p>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="team-invite-cancel" type="button">Cancel</button>
+                    <button class="btn btn-primary" id="team-invite-submit" type="submit"><i class="ph ph-paper-plane-tilt"></i> Send Invite</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Incoming team invitations -->
+    <div class="review-modal-overlay" id="team-notifications-modal">
+        <div class="review-modal glass-card" style="max-width:560px;">
+            <div class="modal-header">
+                <h2><i class="ph ph-bell"></i> Team Invitations</h2>
+                <button class="modal-close-btn" id="team-notifications-close" type="button"><i class="ph ph-x"></i></button>
+            </div>
+            <div id="team-invitations-list" class="team-invitations-list" aria-live="polite"></div>
+        </div>
+    </div>
+
     <!-- Edit Profile Modal -->
     <div class="review-modal-overlay" id="edit-profile-modal">
         <div class="review-modal glass-card" style="max-width: 420px;">

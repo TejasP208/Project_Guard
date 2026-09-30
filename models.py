@@ -42,6 +42,22 @@ class MentorStudent(Base):
     year = Column(String, nullable=True)
 
 
+class MentorReview(Base):
+    __tablename__ = "mentor_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mentor_name = Column(String, nullable=False)
+    mentor_key = Column(String, index=True, nullable=False)
+    group_name = Column(String, nullable=False)
+    review_type = Column(String, nullable=False)
+    review_date = Column(String, nullable=False)
+    review_time = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="scheduled")
+    created_at = Column(String, nullable=False)
+    completed_at = Column(String, nullable=True)
+
+
 # 🔥 Team table
 class Team(Base):
     __tablename__ = "teams"
@@ -63,3 +79,15 @@ class TeamMember(Base):
     id = Column(Integer, primary_key=True)
     team_id = Column(Integer)
     roll_no = Column(String)
+
+
+class TeamInvitation(Base):
+    __tablename__ = "team_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, index=True, nullable=False)
+    inviter_roll_no = Column(String, nullable=False)
+    invitee_roll_no = Column(String, index=True, nullable=False)
+    status = Column(String, index=True, nullable=False, default="pending")
+    created_at = Column(String, nullable=False)
+    responded_at = Column(String, nullable=True)
