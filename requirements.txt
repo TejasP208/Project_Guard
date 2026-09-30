@@ -11,10 +11,14 @@ openpyxl
 groq
 fastapi
 uvicorn
+pydantic
+starlette
 SQLAlchemy
 passlib
 python-multipart
 psycopg[binary]
 pgvector
 httpx
+# Required by the SQLite fallback checker and legacy index scripts.
+# Used by the included manual API request script.
 requests

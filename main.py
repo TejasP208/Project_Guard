@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from openpyxl.utils.exceptions import InvalidFileException
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,6 +18,7 @@ from models import Base, Mentor, MentorStudent, Project, Student, Team, TeamMemb
 from nlp.checker import run_plagiarism_check
 from passwords import hash_password, verify_password
 from utils import generate_team_code
+from embeddings import CloudflareEmbeddingClient
 
 
 @asynccontextmanager
@@ -284,6 +286,9 @@ def submit_project(data: ProjectSubmission):
             project_abstract=data.project_abstract,
             team_name=team.team_name
         )
+        if engine.dialect.name == "postgresql":
+            text = f"{data.project_name}. {data.project_abstract}".strip()
+            new_project.embedding = CloudflareEmbeddingClient().embed(text)
         db.add(new_project)
         db.commit()
         db.refresh(new_project)
@@ -304,7 +309,9 @@ async def check_plagiarism(
 ):
     try:
         file_bytes = await file.read()
-        result = run_plagiarism_check(title, description, file_bytes, file.filename or "")
+        result = await run_in_threadpool(
+            run_plagiarism_check, title, description, file_bytes, file.filename or ""
+        )
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         return result

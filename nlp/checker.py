@@ -20,14 +20,17 @@ except ImportError:
     from nlp.preprocessor import preprocess, preprocess_batch
     from nlp.tfidf_engine import compute_tfidf_similarity
 
-from database import SessionLocal
+from database import SessionLocal, engine
+from embeddings.chunking import chunk_document
+from embeddings.project_vectors import best_similarities_for_texts
 from models import Project
-from Models.search import get_all_sbert_scores
 
 # Hybrid layer weights
 WEIGHT_TFIDF = 0.35
 WEIGHT_LDA   = 0.25
 WEIGHT_SBERT = 0.40
+WEIGHT_QWEN_TFIDF = 0.60
+WEIGHT_QWEN = 0.40
 
 
 class TrainingProject(TypedDict):
@@ -99,56 +102,87 @@ def run_plagiarism_check(
     print("[Checker] Running TF-IDF layer...")
     tfidf_scores = compute_tfidf_similarity(new_clean, abstracts_clean)
 
-    # Layer 2 — LDA
-    print("[Checker] Running LDA layer...")
-    lda_model, count_vec, existing_dists = train_lda(abstracts_clean)
-    lda_scores = compute_lda_similarity(new_clean, lda_model, count_vec, existing_dists)
+    if engine.dialect.name == "postgresql":
+        # Compare both the project summary and every extracted document chunk.
+        print("[Checker] Running Qwen/pgvector layer...")
+        try:
+            summary = f"{title}. {description}" if title.strip() or description.strip() else ""
+            query_texts = chunk_document(summary)
+            query_texts.extend(chunk_document(file_text))
+        except ValueError as exc:
+            return {"error": str(exc)}
+        qwen_map = best_similarities_for_texts(query_texts)
+        missing = [p["id"] for p in projects if p["id"] not in qwen_map]
+        if missing:
+            raise RuntimeError(
+                f"{len(missing)} project(s) have no Qwen embedding; run the PostgreSQL vector indexer"
+            )
+        semantic_scores = [qwen_map[p["id"]] for p in projects]
+        combined = [
+            WEIGHT_QWEN_TFIDF * t + WEIGHT_QWEN * s
+            for t, s in zip(tfidf_scores, semantic_scores)
+        ]
+        semantic_name = "qwen_score"
+        weights = {"tfidf": WEIGHT_QWEN_TFIDF, "qwen": WEIGHT_QWEN}
+        topics = []
+    else:
+        # Keep the existing local SQLite checker working during migration.
+        from Models.search import get_all_sbert_scores
+        from nlp.lda_engine import train_lda, compute_lda_similarity, get_topic_labels
 
-    # Layer 3 — SBERT
-    print("[Checker] Running SBERT layer...")
-    sbert_map    = get_all_sbert_scores(title, f"{description} {file_text}")
-    sbert_scores = [sbert_map.get(str(p['id']), 0.0) for p in projects]
+        print("[Checker] Running LDA layer...")
+        lda_model, count_vec, existing_dists = train_lda(abstracts_clean)
+        lda_scores = compute_lda_similarity(new_clean, lda_model, count_vec, existing_dists)
 
-    # Blend all 3 layers
-    combined = [
-        (WEIGHT_TFIDF * t) + (WEIGHT_LDA * l) + (WEIGHT_SBERT * s)
-        for t, l, s in zip(tfidf_scores, lda_scores, sbert_scores)
-    ]
+        print("[Checker] Running SBERT layer...")
+        sbert_map = get_all_sbert_scores(title, f"{description} {file_text}")
+        semantic_scores = [sbert_map.get(str(p['id']), 0.0) for p in projects]
+        combined = [
+            WEIGHT_TFIDF * t + WEIGHT_LDA * l + WEIGHT_SBERT * s
+            for t, l, s in zip(tfidf_scores, lda_scores, semantic_scores)
+        ]
+        semantic_name = "sbert_score"
+        weights = {"tfidf": WEIGHT_TFIDF, "lda": WEIGHT_LDA, "sbert": WEIGHT_SBERT}
+        topics = get_topic_labels(lda_model, count_vec)
 
     best_i    = int(np.argmax(combined))
     best      = projects[best_i]
     final_pct = round(combined[best_i] * 100, 2)
 
     top3_idx = sorted(range(len(combined)), key=lambda i: combined[i], reverse=True)[:3]
-    top3 = [
-        {
+    top3 = []
+    for rank, i in enumerate(top3_idx):
+        match = {
             "rank"          : rank + 1,
             "project_name"  : projects[i]['project_name'],
             "group_no"      : projects[i]['group_no'],
             "year"          : projects[i]['year'],
             "combined_score": round(combined[i]     * 100, 2),
             "tfidf_score"   : round(tfidf_scores[i] * 100, 2),
-            "lda_score"     : round(lda_scores[i]   * 100, 2),
-            "sbert_score"   : round(sbert_scores[i] * 100, 2),
+            semantic_name   : round(semantic_scores[i] * 100, 2),
         }
-        for rank, i in enumerate(top3_idx)
-    ]
+        if engine.dialect.name != "postgresql":
+            match["lda_score"] = round(lda_scores[i] * 100, 2)
+        top3.append(match)
 
-    topics = get_topic_labels(lda_model, count_vec)
-
-    return {
+    result = {
         "plagiarism_percent": final_pct,
         "risk_level"        : determine_risk(final_pct),
         "matched_project"   : best['project_name'],
         "matched_group"     : best['group_no'],
         "matched_year"      : best['year'],
         "tfidf_score"       : round(tfidf_scores[best_i]  * 100, 2),
-        "lda_score"         : round(lda_scores[best_i]    * 100, 2),
-        "sbert_score"       : round(sbert_scores[best_i]  * 100, 2),
-        "weights"           : {"tfidf": WEIGHT_TFIDF, "lda": WEIGHT_LDA, "sbert": WEIGHT_SBERT},
+        semantic_name       : round(semantic_scores[best_i] * 100, 2),
+        "weights"           : weights,
         "top_3_matches"     : top3,
         "topics_discovered" : [t['label'] for t in topics],
     }
+
+    if engine.dialect.name == "postgresql":
+        result["embedding_chunk_count"] = len(query_texts)
+    else:
+        result["lda_score"] = round(lda_scores[best_i] * 100, 2)
+    return result
 
 
 if __name__ == "__main__":
@@ -173,7 +207,8 @@ if __name__ == "__main__":
             continue
         print(f"  Score : {result['plagiarism_percent']}%  |  Risk: {result['risk_level']}")
         print(f"  Match : {result['matched_project']} (G{result['matched_group']}, {result['matched_year']})")
-        print(f"  Layers: TF-IDF={result['tfidf_score']}%  LDA={result['lda_score']}%  SBERT={result['sbert_score']}%")
+        semantic_name = "qwen_score" if "qwen_score" in result else "sbert_score"
+        print(f"  Layers: TF-IDF={result['tfidf_score']}%  {semantic_name}={result[semantic_name]}%")
         print("  Top 3:")
         for m in result['top_3_matches']:
             print(f"    #{m['rank']} {m['project_name']} — {m['combined_score']}%")

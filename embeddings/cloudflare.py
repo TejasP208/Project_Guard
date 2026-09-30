@@ -28,9 +28,18 @@ class CloudflareEmbeddingClient:
 
     def embed(self, text: str) -> list[float]:
         """Return one 1024-dimensional vector for nonempty text."""
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError("Embedding text must be a nonempty string")
+        return self.embed_many([text])[0]
 
+    def embed_many(self, texts: list[str]) -> list[list[float]]:
+        """Return vectors in input order, sending up to eight texts per request."""
+        if not texts or any(not isinstance(text, str) or not text.strip() for text in texts):
+            raise ValueError("Embedding texts must be nonempty strings")
+        vectors = []
+        for start in range(0, len(texts), 8):
+            vectors.extend(self._embed_batch([text.strip() for text in texts[start:start + 8]]))
+        return vectors
+
+    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         url = (
             f"https://api.cloudflare.com/client/v4/accounts/"
             f"{self.account_id}/ai/run/{MODEL}"
@@ -39,7 +48,7 @@ class CloudflareEmbeddingClient:
             response = httpx.post(
                 url,
                 headers={"Authorization": f"Bearer {self.api_token}"},
-                json={"text": [text.strip()]},
+                json={"text": texts},
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -53,18 +62,20 @@ class CloudflareEmbeddingClient:
         if not isinstance(result, dict):
             raise EmbeddingError("Cloudflare embedding response has no result")
         data = result.get("data")
-        if not isinstance(data, list) or len(data) != 1:
-            raise EmbeddingError("Cloudflare embedding response must contain one vector")
-        vector = data[0]
-        if (
-            not isinstance(vector, list)
-            or len(vector) != DIMENSIONS
-            or any(
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-                for value in vector
-            )
-        ):
-            raise EmbeddingError("Cloudflare returned an invalid embedding vector")
-        return [float(value) for value in vector]
+        if not isinstance(data, list) or len(data) != len(texts):
+            raise EmbeddingError("Cloudflare returned an unexpected number of vectors")
+        vectors = []
+        for vector in data:
+            if (
+                not isinstance(vector, list)
+                or len(vector) != DIMENSIONS
+                or any(
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(value)
+                    for value in vector
+                )
+            ):
+                raise EmbeddingError("Cloudflare returned an invalid embedding vector")
+            vectors.append([float(value) for value in vector])
+        return vectors
