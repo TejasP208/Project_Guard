@@ -6,37 +6,44 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
-# Keep SQLite as the local development default. Set DATABASE_URL to a
-# PostgreSQL connection string in deployment (or in the local .env file).
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./DB/training_data.db")
+# The application database is PostgreSQL only. SQLite is read only by the
+# one-time import script and is never used as the live application database.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL must be set to a PostgreSQL connection URL.")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
-engine_options = {}
-if DATABASE_URL.startswith("sqlite:"):
-    engine_options["connect_args"] = {"check_same_thread": False}
+if not DATABASE_URL.startswith("postgresql+psycopg://"):
+    raise RuntimeError("DATABASE_URL must use PostgreSQL (postgresql:// or postgres://).")
 
-engine = create_engine(DATABASE_URL, **engine_options)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(bind=engine)
 
 
 def migrate_database():
     """Apply safe additive project, mentor-roster, and vector migrations."""
-    project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
-    if "team_name" not in project_columns:
-        with engine.begin() as connection:
-            connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN team_name VARCHAR")
     if inspect(engine).has_table("mentor_students"):
         roster_columns = {column["name"] for column in inspect(engine).get_columns("mentor_students")}
         if "project_name" not in roster_columns:
             with engine.begin() as connection:
                 connection.exec_driver_sql("ALTER TABLE mentor_students ADD COLUMN project_name VARCHAR")
-    if engine.dialect.name == "postgresql":
-        with engine.begin() as connection:
-            connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
+    if not inspect(engine).has_table("projects"):
+        return
+    project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
+    with engine.begin() as connection:
+        if "team_name" not in project_columns:
+            connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN team_name VARCHAR")
+        if "embedding" not in project_columns:
             connection.exec_driver_sql(
-                "ALTER TABLE projects ADD COLUMN IF NOT EXISTS embedding vector(1024)"
+                "ALTER TABLE projects ADD COLUMN embedding vector(1024)"
             )
+
+
+def enable_pgvector():
+    """Enable pgvector before SQLAlchemy creates the VECTOR-backed schema."""
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")

@@ -9,12 +9,11 @@ import sqlite3
 
 from sqlalchemy import func, select, text
 
-from database import engine
+from database import enable_pgvector, engine, migrate_database
 from models import Base
 
-
 SOURCE_DB = os.path.join(os.path.dirname(__file__), "DB", "training_data.db")
-TABLE_NAMES = ("students", "mentors", "teams", "team_members", "projects")
+REQUIRED_TABLE_NAMES = ("students", "mentors", "teams", "team_members", "projects")
 
 
 def migrate():
@@ -23,8 +22,9 @@ def migrate():
     if not os.path.isfile(SOURCE_DB):
         raise FileNotFoundError(f"SQLite source database not found: {SOURCE_DB}")
 
+    enable_pgvector()
     Base.metadata.create_all(bind=engine)
-    tables = {name: Base.metadata.tables[name] for name in TABLE_NAMES}
+    migrate_database()
 
     with sqlite3.connect(f"file:{SOURCE_DB}?mode=ro", uri=True) as source:
         source.row_factory = sqlite3.Row
@@ -34,13 +34,17 @@ def migrate():
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-        missing = set(TABLE_NAMES) - source_table_names
+        missing = set(REQUIRED_TABLE_NAMES) - source_table_names
         if missing:
             raise RuntimeError(f"SQLite source is missing tables: {', '.join(sorted(missing))}")
 
+        table_names: list[str] = list(REQUIRED_TABLE_NAMES)
+        if "mentor_students" in source_table_names:
+            table_names.append("mentor_students")
+        tables = {name: Base.metadata.tables[name] for name in table_names}
         source_rows = {
             name: source.execute(f'SELECT * FROM "{name}"').fetchall()
-            for name in TABLE_NAMES
+            for name in table_names
         }
 
     with engine.begin() as target:
@@ -56,7 +60,7 @@ def migrate():
                 + ". Use a fresh/empty database to avoid duplicate or overwritten records."
             )
 
-        for name in TABLE_NAMES:
+        for name in table_names:
             table = tables[name]
             destination_columns = set(table.columns.keys())
             rows = [

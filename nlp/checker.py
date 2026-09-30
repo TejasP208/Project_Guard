@@ -1,5 +1,7 @@
 import os
 import sys
+from typing import TypedDict
+
 import numpy as np
 from sqlalchemy import select
 
@@ -8,19 +10,19 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 try:
-    from .extractor    import extract_text
+    from .extractor import extract_text
+    from .lda_engine import compute_lda_similarity, get_topic_labels, train_lda
     from .preprocessor import preprocess, preprocess_batch
     from .tfidf_engine import compute_tfidf_similarity
-    from .lda_engine   import train_lda, compute_lda_similarity, get_topic_labels
 except ImportError:
-    from nlp.extractor    import extract_text
+    from nlp.extractor import extract_text
+    from nlp.lda_engine import compute_lda_similarity, get_topic_labels, train_lda
     from nlp.preprocessor import preprocess, preprocess_batch
     from nlp.tfidf_engine import compute_tfidf_similarity
-    from nlp.lda_engine   import train_lda, compute_lda_similarity, get_topic_labels
 
-from Models.search import get_all_sbert_scores
 from database import SessionLocal
 from models import Project
+from Models.search import get_all_sbert_scores
 
 # Hybrid layer weights
 WEIGHT_TFIDF = 0.35
@@ -28,7 +30,15 @@ WEIGHT_LDA   = 0.25
 WEIGHT_SBERT = 0.40
 
 
-def load_training_projects() -> list:
+class TrainingProject(TypedDict):
+    id: int
+    year: str | None
+    group_no: int | None
+    project_name: str | None
+    project_abstract: str | None
+
+
+def load_training_projects() -> list[TrainingProject]:
     with SessionLocal() as db:
         rows = db.execute(
             select(
@@ -57,7 +67,9 @@ def determine_risk(score: float) -> str:
     else:            return "High"
 
 
-def run_plagiarism_check(title: str, description: str, file_bytes: bytes, filename: str) -> dict:
+def run_plagiarism_check(
+    title: str, description: str, file_bytes: bytes, filename: str
+) -> dict[str, object]:
     # Extract and combine all text
     file_text = extract_text(file_bytes, filename)
     full_text = f"{title} {description} {file_text}".strip()
@@ -81,7 +93,7 @@ def run_plagiarism_check(title: str, description: str, file_bytes: bytes, filena
             "error"             : "No projects in database to compare against."
         }
 
-    abstracts_clean = preprocess_batch([p['project_abstract'] for p in projects])
+    abstracts_clean = preprocess_batch([p["project_abstract"] or "" for p in projects])
 
     # Layer 1 — TF-IDF
     print("[Checker] Running TF-IDF layer...")
@@ -162,7 +174,7 @@ if __name__ == "__main__":
         print(f"  Score : {result['plagiarism_percent']}%  |  Risk: {result['risk_level']}")
         print(f"  Match : {result['matched_project']} (G{result['matched_group']}, {result['matched_year']})")
         print(f"  Layers: TF-IDF={result['tfidf_score']}%  LDA={result['lda_score']}%  SBERT={result['sbert_score']}%")
-        print(f"  Top 3:")
+        print("  Top 3:")
         for m in result['top_3_matches']:
             print(f"    #{m['rank']} {m['project_name']} — {m['combined_score']}%")
 

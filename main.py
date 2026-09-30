@@ -1,25 +1,33 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.responses import StreamingResponse
-from axiom_ai import Chatbot_stream
-from fastapi.middleware.cors import CORSMiddleware
-from database import engine, SessionLocal, migrate_database
-from models import Base, Project, Team, TeamMember, Student, Mentor, MentorStudent
-from mentor_roster import mentor_key, parse_mentor_roster
-from openpyxl.utils.exceptions import InvalidFileException
+from contextlib import asynccontextmanager
+from typing import Annotated
 from zipfile import BadZipFile
-from sqlalchemy import func
-from passlib.hash import pbkdf2_sha256
-from fastapi import HTTPException
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel
-import os
-from utils import generate_team_code
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+
+from axiom_ai import Chatbot_stream
+from database import SessionLocal, enable_pgvector, engine, migrate_database
+from mentor_roster import mentor_key, parse_mentor_roster
+from models import Base, Mentor, MentorStudent, Project, Student, Team, TeamMember
 from nlp.checker import run_plagiarism_check
+from passwords import hash_password, verify_password
+from utils import generate_team_code
 
-# Initialize DB
-Base.metadata.create_all(bind=engine)
-migrate_database()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Create all runtime tables in PostgreSQL only after pgvector is enabled.
+    enable_pgvector()
+    Base.metadata.create_all(bind=engine)
+    migrate_database()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 # Middleware
 app.add_middleware(
@@ -49,7 +57,7 @@ class CreateTeamRequest(BaseModel):
     team_name: str
     description: str = ""
     max_members: int = 4
-    roll_no: str = None
+    roll_no: str | None = None
 
 class JoinTeamRequest(BaseModel):
     team_code: str
@@ -87,7 +95,7 @@ def signup(data: SignupRequest):
         if db.query(Student).filter(Student.roll_no == data.roll_no).first():
             raise HTTPException(status_code=400, detail="Roll number already registered")
         
-        hashed_password = pbkdf2_sha256.hash(data.password)
+        hashed_password = hash_password(data.password)
         new_student = Student(
             roll_no=data.roll_no,
             password=hashed_password,
@@ -96,7 +104,9 @@ def signup(data: SignupRequest):
         db.add(new_student)
         db.commit()
         return {"message": "Signup successful"}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -107,7 +117,7 @@ def login(data: LoginRequest):
     db = SessionLocal()
     try:
         student = db.query(Student).filter(Student.roll_no == data.roll_no).first()
-        if not student or not pbkdf2_sha256.verify(data.password, student.password):
+        if not student or not student.password or not verify_password(data.password, student.password):
             raise HTTPException(status_code=401, detail="Invalid roll number or password")
         return {
             "message": "Login successful",
@@ -121,9 +131,8 @@ def login(data: LoginRequest):
 def create_team(data: CreateTeamRequest):
     db = SessionLocal()
     try:
-        if data.roll_no:
-            if db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
-                raise HTTPException(status_code=400, detail="You are already in a team. You cannot create another one.")
+        if data.roll_no and db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
+            raise HTTPException(status_code=400, detail="You are already in a team. You cannot create another one.")
 
         code = generate_team_code()
         while db.query(Team).filter(Team.team_code == code).first():
@@ -152,7 +161,9 @@ def create_team(data: CreateTeamRequest):
             "team_name": new_team.team_name,
             "members": member_list
         }
-    except Exception as e:
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -162,9 +173,8 @@ def create_team(data: CreateTeamRequest):
 def join_team(data: JoinTeamRequest):
     db = SessionLocal()
     try:
-        if data.roll_no:
-            if db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
-                raise HTTPException(status_code=400, detail="You are already in a team. You cannot join multiple teams.")
+        if data.roll_no and db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
+            raise HTTPException(status_code=400, detail="You are already in a team. You cannot join multiple teams.")
 
         team = db.query(Team).filter(Team.team_code == data.team_code).first()
         if not team:
@@ -190,7 +200,7 @@ def join_team(data: JoinTeamRequest):
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -217,7 +227,7 @@ def get_student_team(roll_no: str):
             "team_code": team.team_code,
             "members": member_list
         }
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
@@ -245,7 +255,7 @@ def leave_team(data: LeaveTeamRequest):
         return {"message": "Successfully left the team"}
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -278,7 +288,9 @@ def submit_project(data: ProjectSubmission):
         db.commit()
         db.refresh(new_project)
         return {"message": "Project submitted successfully!"}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -286,19 +298,19 @@ def submit_project(data: ProjectSubmission):
 
 @app.post("/check-plagiarism")
 async def check_plagiarism(
-    title: str = Form(""),
-    description: str = Form(""),
-    file: UploadFile = File(...)
+    file: Annotated[UploadFile, File()],
+    title: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
 ):
     try:
         file_bytes = await file.read()
-        result = run_plagiarism_check(title, description, file_bytes, file.filename)
+        result = run_plagiarism_check(title, description, file_bytes, file.filename or "")
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - translate document/parser failures to an API response
         raise HTTPException(status_code=500, detail=str(e))
 
 # ── Mentor Endpoints ──────────────────────────────────────────────
@@ -311,7 +323,7 @@ def mentor_signup(data: MentorSignupRequest):
         if db.query(Mentor).filter(func.lower(Mentor.username) == username.lower()).first():
             raise HTTPException(status_code=400, detail="Username already registered")
 
-        hashed_password = pbkdf2_sha256.hash(data.password)
+        hashed_password = hash_password(data.password)
         new_mentor = Mentor(
             username=username,
             password=hashed_password
@@ -321,7 +333,7 @@ def mentor_signup(data: MentorSignupRequest):
         return {"message": "Mentor account created successfully"}
     except HTTPException:
         raise
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -332,7 +344,7 @@ def mentor_login(data: MentorLoginRequest):
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.username.strip().lower()).first()
-        if not mentor or not pbkdf2_sha256.verify(data.password, mentor.password):
+        if not mentor or not mentor.password or not verify_password(data.password, mentor.password):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         return {
             "message": "Login successful",
@@ -362,11 +374,11 @@ def list_projects():
         db.close()
 
 @app.get("/api/students")
-def get_students():
+def get_students() -> list[dict[str, str | int | None]]:
     db = SessionLocal()
     try:
-        students = db.query(Student).all()
-        result = []
+        students: list[Student] = db.query(Student).all()
+        result: list[dict[str, str | int | None]] = []
         for s in students:
             member = db.query(TeamMember).filter(TeamMember.roll_no == s.roll_no).first()
             team_name = "No Team"
@@ -392,7 +404,10 @@ def get_students():
 
 
 @app.post("/mentor/students/import")
-async def import_mentor_students(mentor_user: str = Form(...), file: UploadFile = File(...)):
+async def import_mentor_students(
+    mentor_user: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Upload an .xlsx Excel file.")
     content = await file.read(5 * 1024 * 1024 + 1)
@@ -432,7 +447,7 @@ async def import_mentor_students(mentor_user: str = Form(...), file: UploadFile 
     except HTTPException:
         db.rollback()
         raise
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
         raise
     finally:
@@ -440,16 +455,16 @@ async def import_mentor_students(mentor_user: str = Form(...), file: UploadFile 
 
 
 @app.get("/mentor/students")
-def get_mentor_students(mentor_user: str):
+def get_mentor_students(mentor_user: str) -> list[dict[str, str]]:
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
-        roster = db.query(MentorStudent).filter(
+        roster: list[MentorStudent] = db.query(MentorStudent).filter(
             MentorStudent.mentor_key == mentor_key(mentor.username)
         ).order_by(MentorStudent.student_name).all()
-        result = []
+        result: list[dict[str, str]] = []
         for entry in roster:
             team_name = entry.group_name or "No Group"
             project_name = entry.project_name or "No Project"
@@ -458,10 +473,10 @@ def get_mentor_students(mentor_user: str):
                 if member:
                     team = db.query(Team).filter(Team.id == member.team_id).first()
                     if team:
-                        team_name = team.team_name
+                        team_name = team.team_name or "No Group"
                         project = db.query(Project).filter(Project.team_name == team.team_name).first()
                         if project:
-                            project_name = project.project_name
+                            project_name = project.project_name or "No Project"
             result.append({
                 "student_name": entry.student_name,
                 "prn": entry.prn or "",

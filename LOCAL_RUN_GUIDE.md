@@ -10,7 +10,7 @@ This guide explains how to start the backend and frontend locally, open the stud
 - **Frontend:** Static HTML, CSS, and JavaScript files in the `Frontend/` folder.
   - This project does not define a separate frontend framework or frontend server.
   - Serve the folder with Python's built-in HTTP server at `http://127.0.0.1:5500`.
-- **Database:** SQLite file at `DB/training_data.db` by default. Set `DATABASE_URL` to a PostgreSQL URL to use PostgreSQL; PostgreSQL deployments also store 1024-dimensional project embeddings with pgvector.
+- **Database:** PostgreSQL with the pgvector extension. The backend requires `DATABASE_URL`; it no longer falls back to SQLite.
 - **Axiom chatbot:** Uses Groq via the backend. The Groq key remains in the root `.env`; it is never needed in the frontend.
 
 ## One-time setup
@@ -30,7 +30,7 @@ source venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-The root `.env` should contain the Groq API key. The current code accepts the existing `API_key` name; `GROQ_API_KEY` is also supported. Do not put the key in frontend files or share it publicly.
+The root `.env` should contain `DATABASE_URL` with a PostgreSQL connection URL and the Groq API key. The current code accepts the existing `API_key` name; `GROQ_API_KEY` is also supported. The PostgreSQL server must have pgvector installed and the configured database user must be allowed to enable the `vector` extension. Do not put API keys in frontend files or share them publicly.
 
 ## Start the application
 
@@ -83,13 +83,13 @@ Open the sign-in pages first. The dashboard pages redirect to the corresponding 
 4. After account creation, return to **Login**.
 5. Sign in with the same mentor name and password. The mentor dashboard opens.
 
-Accounts are stored in `DB/training_data.db`; signup is required unless an account already exists in that database. Successful login is remembered in browser `localStorage`. Use **Logout** in the portal to clear that browser login.
+Accounts are stored in the configured PostgreSQL database; signup is required unless an account already exists in that database. Successful login is remembered in browser `localStorage`. Use **Logout** in the portal to clear that browser login.
 
 ## PostgreSQL and vector search
 
-For deployment, set `DATABASE_URL` to the PostgreSQL connection URL. The database role must be allowed to install/use the `vector` extension, and the PostgreSQL server must have pgvector installed. Backend startup enables the extension and adds the nullable `projects.embedding vector(1024)` column. A database administrator may need to install pgvector on the server first.
+Set `DATABASE_URL` in the root `.env` to the PostgreSQL connection URL. Backend startup enables pgvector before creating tables, creates the mentor roster and app tables in PostgreSQL, and adds the nullable `projects.embedding vector(1024)` column. A database administrator may need to install pgvector on the server first and grant extension privileges.
 
-After importing project rows with `python migrate_sqlite_to_postgres.py`, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the backend environment, then run:
+If you need to move existing records from the old local `DB/training_data.db`, run `python migrate_sqlite_to_postgres.py` once after setting `DATABASE_URL`. The SQLite file is only a read-only migration source; the running app reads and writes PostgreSQL. The importer also copies mentor roster rows if that legacy database contains them. To prepare project vectors later, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the backend environment, then run:
 
 ```bash
 python -m Models.scripts.index_postgres_vectors
