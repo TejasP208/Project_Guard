@@ -261,10 +261,12 @@
                             <i class="ph ph-x"></i>
                         </button>
                     </div>
-                    <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
-                        <i class="ph ph-user-plus"></i> Add Students
-                    </button>
-                    <p id="student-import-status" role="status" aria-live="polite"></p>
+                    <div class="upload-action-row">
+                        <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
+                            <i class="ph ph-user-plus"></i> Add Students
+                        </button>
+                        <div id="student-import-status" class="student-import-status hidden" role="status" aria-live="polite"></div>
+                    </div>
                 </div>
 
                 <div class="glass-card mentor-table-card">
@@ -275,6 +277,7 @@
                             <input type="text" placeholder="Search students..." id="student-search">
                         </div>
                     </div>
+                    <p id="student-list-feedback" class="student-list-feedback" role="status" aria-live="polite"></p>
                     <div class="table-wrapper">
                         <table class="mentor-table">
                             <thead>
@@ -300,7 +303,7 @@
                     <div class="card glass-card group-sidebar-card">
                         <div class="group-list-header">
                             <span><i class="ph ph-users-three" style="color: var(--primary);"></i> Assigned Groups</span>
-                            <span class="chip" style="font-size: 0.72rem;" id="total-groups-badge">5 Groups</span>
+                            <span class="chip" style="font-size: 0.72rem;" id="total-groups-badge">0 Groups</span>
                         </div>
                         <div class="group-item-list" id="group-selector-list">
                             <!-- Group list items dynamically populated -->
@@ -311,8 +314,8 @@
                     <div class="card glass-card chat-room-card">
                         <div class="chat-room-header">
                             <div class="chat-room-info">
-                                <h4 id="active-group-title">Group A - AI Plagiarism Detector</h4>
-                                <span id="active-group-members"><i class="ph ph-users"></i> Members: Ravi, Priya, Amit</span>
+                                <h4 id="active-group-title">Select a group</h4>
+                                <span id="active-group-members"></span>
                             </div>
                             <div class="chat-room-actions">
                                 <button class="btn btn-secondary btn-sm" id="btn-start-instant-meet" type="button" style="display: flex; align-items: center; gap: 6px; padding: 0.5rem 0.9rem; font-size: 0.85rem;" title="Start video meeting with this group">
@@ -424,6 +427,30 @@
                     <button type="submit" class="btn btn-primary" id="btn-save-profile">
                         <i class="ph ph-check-circle"></i> Save Changes
                     </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Student roster details and edit modal -->
+    <div class="review-modal-overlay" id="student-roster-modal">
+        <div class="review-modal glass-card">
+            <div class="modal-header">
+                <h2 id="student-roster-modal-title"><i class="ph ph-student"></i> Student Details</h2>
+                <button class="modal-close-btn" id="student-roster-close" type="button" aria-label="Close student details"><i class="ph ph-x"></i></button>
+            </div>
+            <form class="modal-form" id="student-roster-form">
+                <div class="form-group"><label for="roster-student-name">Student Name</label><input class="modal-input" id="roster-student-name" required></div>
+                <div class="form-row">
+                    <div class="form-group"><label for="roster-student-prn">PRN</label><input class="modal-input" id="roster-student-prn"></div>
+                    <div class="form-group"><label for="roster-student-group">Group Number</label><input class="modal-input" id="roster-student-group"></div>
+                </div>
+                <div class="form-group"><label for="roster-student-project">Project</label><input class="modal-input" id="roster-student-project"></div>
+                <div class="form-group"><label for="roster-student-year">Year</label><input class="modal-input" id="roster-student-year"></div>
+                <p id="student-roster-error" class="student-roster-error" role="alert"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="student-roster-cancel">Close</button>
+                    <button type="submit" class="btn btn-primary" id="student-roster-save"><i class="ph ph-check"></i> Save Changes</button>
                 </div>
             </form>
         </div>
@@ -567,7 +594,7 @@
                 }
                 // Render connect history when navigating to Group Connect
                 if (navId === 'nav-group-connect') {
-                    renderConnectHistory();
+                    loadAssignedGroups();
                 }
             }
 
@@ -627,6 +654,7 @@
             const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[char]);
+            let rosterStudents = [];
 
             async function loadStudents() {
                 const tbody = document.querySelector('#view-student-list .mentor-table tbody');
@@ -637,6 +665,7 @@
                     const response = await fetch(`http://127.0.0.1:8000/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
                     if (!response.ok) throw new Error('Failed to fetch');
                     const students = await response.json();
+                    rosterStudents = students;
 
                     if (students.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students assigned to you yet. Upload an Excel sheet to add them.</td></tr>';
@@ -671,7 +700,13 @@
                                 <td>${escapeHtml(label)}</td>
                                 <td>${escapeHtml(s.project_name)}</td>
                                 <td><span class="chip ${s.submissions === '0 / 1' ? 'pending' : 'verified'}">${escapeHtml(s.submissions)}</span></td>
-                                <td><button class="btn-table-action" type="button" title="View student"><i class="ph ph-eye"></i> View</button></td>
+                                <td>
+                                    <div class="student-row-actions">
+                                        <button class="btn-table-action" type="button" data-action="view" data-id="${s.id}"><i class="ph ph-eye"></i> View</button>
+                                        <button class="btn-table-action" type="button" data-action="edit" data-id="${s.id}"><i class="ph ph-pencil-simple"></i> Edit</button>
+                                        <button class="btn-table-action student-delete-action" type="button" data-action="delete" data-id="${s.id}"><i class="ph ph-trash"></i> Delete</button>
+                                    </div>
+                                </td>
                             </tr>
                             `).join('')}
                         `).join('') + '<tr class="student-no-match" hidden><td colspan="7">No students match your search.</td></tr>';
@@ -683,9 +718,99 @@
                     document.getElementById('student-search').dispatchEvent(new Event('input'));
                 } catch (error) {
                     console.error('Error loading students:', error);
+                    rosterStudents = [];
                     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load students. Ensure backend is running.</td></tr>';
                 }
             }
+
+            const rosterModal = document.getElementById('student-roster-modal');
+            const rosterForm = document.getElementById('student-roster-form');
+            const rosterSave = document.getElementById('student-roster-save');
+            const rosterError = document.getElementById('student-roster-error');
+            const rosterFields = {
+                student_name: document.getElementById('roster-student-name'),
+                prn: document.getElementById('roster-student-prn'),
+                group_number: document.getElementById('roster-student-group'),
+                project_name: document.getElementById('roster-student-project'),
+                year: document.getElementById('roster-student-year')
+            };
+            let selectedRosterId = null;
+
+            function closeRosterModal() {
+                rosterModal.classList.remove('active');
+                selectedRosterId = null;
+                rosterError.textContent = '';
+            }
+
+            function openRosterModal(student, editable) {
+                selectedRosterId = student.id;
+                Object.entries(rosterFields).forEach(([key, field]) => {
+                    field.value = student[key] === 'No Project' ? '' : (student[key] || '');
+                    field.disabled = !editable;
+                });
+                document.getElementById('student-roster-modal-title').textContent = editable ? 'Edit Student' : 'Student Details';
+                rosterSave.style.display = editable ? '' : 'none';
+                rosterError.textContent = '';
+                rosterModal.classList.add('active');
+                if (editable) rosterFields.student_name.focus();
+            }
+
+            document.getElementById('student-roster-close').addEventListener('click', closeRosterModal);
+            document.getElementById('student-roster-cancel').addEventListener('click', closeRosterModal);
+            rosterModal.addEventListener('click', event => {
+                if (event.target === rosterModal) closeRosterModal();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && rosterModal.classList.contains('active')) closeRosterModal();
+            });
+
+            document.querySelector('#view-student-list .mentor-table tbody').addEventListener('click', async event => {
+                const button = event.target.closest('button[data-action]');
+                if (!button) return;
+                const student = rosterStudents.find(item => item.id === Number(button.dataset.id));
+                if (!student) return;
+                if (button.dataset.action === 'view' || button.dataset.action === 'edit') {
+                    openRosterModal(student, button.dataset.action === 'edit');
+                    return;
+                }
+                if (!confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`)) return;
+                button.disabled = true;
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/students/${student.id}?mentor_user=${encodeURIComponent(mentorUser)}`, { method: 'DELETE' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || 'Could not delete student.');
+                    document.getElementById('student-list-feedback').textContent = `${student.student_name} was removed from your roster.`;
+                    await Promise.all([loadStudents(), loadAssignedGroups()]);
+                } catch (error) {
+                    document.getElementById('student-list-feedback').textContent = error.message;
+                    button.disabled = false;
+                }
+            });
+
+            rosterForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (selectedRosterId === null) return;
+                rosterSave.disabled = true;
+                rosterError.textContent = '';
+                const data = { mentor_user: mentorUser };
+                Object.entries(rosterFields).forEach(([key, field]) => { data[key] = field.value.trim(); });
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/students/${selectedRosterId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || 'Could not update student.');
+                    closeRosterModal();
+                    document.getElementById('student-list-feedback').textContent = `${data.student_name} was updated.`;
+                    await Promise.all([loadStudents(), loadAssignedGroups()]);
+                } catch (error) {
+                    rosterError.textContent = error.message;
+                } finally {
+                    rosterSave.disabled = false;
+                }
+            });
 
             // Table search filtering
             function setupSearch(inputId, tableParentId) {
@@ -756,69 +881,69 @@
             // ============================================
             // Group Connect (Group Specific Chat & Meet) Logic
             // ============================================
-            const groupConnectData = [
-                {
-                    id: 'group-a',
-                    name: 'Group A',
-                    project: 'AI-Based Plagiarism Detector',
-                    members: 'Ravi Kumar, Priya Sharma, Amit Verma',
-                    initialMessages: [
-                        { sender: 'student', name: 'Ravi Kumar', text: 'Respected Mentor, we have submitted our draft report.', time: '10:15 AM' },
-                        { sender: 'mentor', text: 'Great work! Please prepare the demo slides for Review-1.', time: '10:30 AM' }
-                    ]
-                },
-                {
-                    id: 'group-b',
-                    name: 'Group B',
-                    project: 'Smart Attendance System',
-                    members: 'Anika Patel, Rohan Mehta, Sneha Gupta',
-                    initialMessages: [
-                        { sender: 'student', name: 'Anika Patel', text: 'Could we schedule a short call regarding facial recognition accuracy?', time: 'Yesterday' },
-                        { sender: 'mentor', text: 'Sure Anika, let us connect today around 3 PM.', time: 'Yesterday' }
-                    ]
-                },
-                {
-                    id: 'group-c',
-                    name: 'Group C',
-                    project: 'E-Commerce Platform',
-                    members: 'Meera Joshi, Karan Singh, Dev Nanda',
-                    initialMessages: [
-                        { sender: 'mentor', text: 'Please ensure your database schema includes indexing for product search.', time: 'Apr 5' }
-                    ]
-                },
-                {
-                    id: 'group-d',
-                    name: 'Group D',
-                    project: 'Healthcare Chatbot',
-                    members: 'Pooja Nair, Varun Rao, Nikhil Sharma',
-                    initialMessages: [
-                        { sender: 'student', name: 'Varun Rao', text: 'We integrated the NLP dataset as discussed.', time: 'Apr 4' }
-                    ]
-                },
-                {
-                    id: 'group-e',
-                    name: 'Group E',
-                    project: 'Budget Tracker App',
-                    members: 'Sanya Iyer, Jay Shah, Tina Roy',
-                    initialMessages: [
-                        { sender: 'mentor', text: 'Welcome team! Feel free to share your initial project wireframes here.', time: 'Apr 3' }
-                    ]
-                }
-            ];
-
-            let currentGroupId = 'group-a';
+            let assignedGroups = [];
+            let currentGroupId = null;
+            const chatStorageKey = `groupConnectMessages:${mentorUser.trim().toLowerCase()}`;
 
             function loadGroupChats() {
-                const stored = localStorage.getItem('groupConnectChats');
-                if (!stored) {
-                    localStorage.setItem('groupConnectChats', JSON.stringify(groupConnectData));
-                    return groupConnectData;
+                let saved = {};
+                try {
+                    saved = JSON.parse(localStorage.getItem(chatStorageKey) || '{}');
+                } catch (error) {
+                    console.warn('Could not read saved group messages:', error);
                 }
-                return JSON.parse(stored);
+                return assignedGroups.map(group => ({
+                    ...group,
+                    initialMessages: Array.isArray(saved[group.id]) ? saved[group.id] : []
+                }));
             }
 
             function saveGroupChats(data) {
-                localStorage.setItem('groupConnectChats', JSON.stringify(data));
+                const messages = Object.fromEntries(data.map(group => [group.id, group.initialMessages]));
+                localStorage.setItem(chatStorageKey, JSON.stringify(messages));
+            }
+
+            async function loadAssignedGroups() {
+                const container = document.getElementById('group-selector-list');
+                container.textContent = 'Loading assigned groups...';
+                try {
+                    const response = await fetch(`http://127.0.0.1:8000/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    if (!response.ok) throw new Error('Failed to load assigned groups');
+                    const students = await response.json();
+                    const byNumber = new Map();
+                    students.forEach(student => {
+                        const number = String(student.group_number || '').trim();
+                        if (!number) return;
+                        const id = `group-${number.toLowerCase()}`;
+                        if (!byNumber.has(id)) {
+                            byNumber.set(id, {
+                                id,
+                                name: /^group\b/i.test(number) ? number : `Group ${number}`,
+                                project: 'No Project',
+                                members: []
+                            });
+                        }
+                        const group = byNumber.get(id);
+                        group.members.push(student.student_name);
+                        if (group.project === 'No Project' && student.project_name && student.project_name !== 'No Project') {
+                            group.project = student.project_name;
+                        }
+                    });
+                    assignedGroups = [...byNumber.values()].sort((a, b) =>
+                        a.name.localeCompare(b.name, undefined, { numeric: true })
+                    );
+                    if (!assignedGroups.some(group => group.id === currentGroupId)) {
+                        currentGroupId = assignedGroups[0]?.id || null;
+                    }
+                    renderGroupSelectorList();
+                    renderActiveGroupRoom();
+                } catch (error) {
+                    console.error('Error loading assigned groups:', error);
+                    assignedGroups = [];
+                    currentGroupId = null;
+                    renderGroupSelectorList();
+                    renderActiveGroupRoom('Could not load assigned groups. Check the backend connection.');
+                }
             }
 
             function renderGroupSelectorList() {
@@ -829,13 +954,18 @@
                 const badge = document.getElementById('total-groups-badge');
                 if (badge) badge.textContent = `${groups.length} Groups`;
 
+                if (groups.length === 0) {
+                    container.innerHTML = '<p class="group-empty-state">No groups assigned to this mentor.</p>';
+                    return;
+                }
+
                 container.innerHTML = groups.map(g => `
-                    <div class="group-item ${g.id === currentGroupId ? 'active' : ''}" data-id="${g.id}">
+                    <div class="group-item ${g.id === currentGroupId ? 'active' : ''}" data-id="${escapeHtml(g.id)}">
                         <div class="group-item-title">
-                            <span>${g.name}</span>
+                            <span>${escapeHtml(g.name)}</span>
                             <i class="ph ph-caret-right" style="font-size: 0.8rem; opacity: 0.6;"></i>
                         </div>
-                        <div class="group-item-sub">${g.project}</div>
+                        <div class="group-item-sub">${escapeHtml(g.project)}</div>
                     </div>
                 `).join('');
 
@@ -848,21 +978,27 @@
                 });
             }
 
-            function renderActiveGroupRoom() {
+            function renderActiveGroupRoom(emptyMessage = 'No groups assigned to this mentor yet.') {
                 const groups = loadGroupChats();
                 const group = groups.find(g => g.id === currentGroupId) || groups[0];
-                if (!group) return;
-
                 const titleEl = document.getElementById('active-group-title');
                 const membersEl = document.getElementById('active-group-members');
-                if (titleEl) titleEl.textContent = `${group.name} - ${group.project}`;
-                if (membersEl) membersEl.innerHTML = `<i class="ph ph-users"></i> Members: ${group.members}`;
-
                 const stream = document.getElementById('group-chat-stream');
+                const controls = document.querySelectorAll('#group-chat-form input, #group-chat-form button, #btn-start-instant-meet, #btn-schedule-group-meet');
+                controls.forEach(control => { control.disabled = !group; });
+                if (!group) {
+                    if (titleEl) titleEl.textContent = 'No assigned group';
+                    if (membersEl) membersEl.textContent = '';
+                    if (stream) stream.textContent = emptyMessage;
+                    return;
+                }
+
+                if (titleEl) titleEl.textContent = `${group.name} - ${group.project}`;
+                if (membersEl) membersEl.textContent = `Members: ${group.members.join(', ')}`;
                 if (!stream) return;
 
                 if (!group.initialMessages || group.initialMessages.length === 0) {
-                    stream.innerHTML = `<div style="text-align: center; color: var(--text-muted); margin: auto;"><i class="ph ph-chats-teardrop" style="font-size: 2.2rem; opacity: 0.4;"></i><p style="margin-top: 8px;">No messages in ${group.name} yet. Type a message below to start communicating.</p></div>`;
+                    stream.innerHTML = `<div style="text-align: center; color: var(--text-muted); margin: auto;"><i class="ph ph-chats-teardrop" style="font-size: 2.2rem; opacity: 0.4;"></i><p style="margin-top: 8px;">No messages in ${escapeHtml(group.name)} yet. Type a message below to start communicating.</p></div>`;
                     return;
                 }
 
@@ -874,10 +1010,10 @@
                                     <i class="ph-fill ph-video-camera"></i>
                                 </div>
                                 <div style="flex: 1;">
-                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.92rem;">🎥 ${msg.title || 'Instant Video Call'}</div>
-                                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><i class="ph ph-clock"></i> ${msg.time}</div>
+                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.92rem;">🎥 ${escapeHtml(msg.title || 'Instant Video Call')}</div>
+                                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><i class="ph ph-clock"></i> ${escapeHtml(msg.time)}</div>
                                 </div>
-                                <a href="${msg.link}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none; display: flex; align-items: center; gap: 4px; padding: 0.45rem 0.9rem; font-size: 0.82rem; white-space: nowrap;">
+                                <a href="${escapeHtml(msg.link)}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none; display: flex; align-items: center; gap: 4px; padding: 0.45rem 0.9rem; font-size: 0.82rem; white-space: nowrap;">
                                     <i class="ph ph-arrow-square-out"></i> Join Meet
                                 </a>
                             </div>
@@ -889,9 +1025,9 @@
 
                     return `
                         <div class="chat-bubble ${isMentor ? 'mentor' : 'student'}">
-                            <span class="sender-label">${senderName}</span>
-                            <div>${msg.text}</div>
-                            <span class="chat-time">${msg.time}</span>
+                            <span class="sender-label">${escapeHtml(senderName)}</span>
+                            <div>${escapeHtml(msg.text)}</div>
+                            <span class="chat-time">${escapeHtml(msg.time)}</span>
                         </div>
                     `;
                 }).join('');
@@ -959,8 +1095,7 @@
             if (btnChatSendMeet) btnChatSendMeet.addEventListener('click', sendMeetToActiveGroup);
 
             // Initial render
-            renderGroupSelectorList();
-            renderActiveGroupRoom();
+            loadAssignedGroups();
             loadProjects();
             loadStudents();
 
@@ -995,6 +1130,21 @@
                     }
                 });
 
+                function setImportStatus(type, message) {
+                    if (!message) {
+                        importStatus.className = 'student-import-status hidden';
+                        importStatus.innerHTML = '';
+                        return;
+                    }
+                    let icon = 'ph-check-circle';
+                    if (type === 'loading') icon = 'ph-spinner ph-spin';
+                    else if (type === 'error') icon = 'ph-warning-circle';
+                    else if (type === 'info') icon = 'ph-info';
+
+                    importStatus.className = `student-import-status status-${type}`;
+                    importStatus.innerHTML = `<i class="ph ${icon}"></i> <span>${message}</span>`;
+                }
+
                 // Remove file
                 if (removeBtn) {
                     removeBtn.addEventListener('click', () => {
@@ -1002,13 +1152,13 @@
                         filePreview.classList.add('hidden');
                         dropZone.style.display = '';
                         addStudentsBtn.disabled = true;
-                        importStatus.textContent = '';
+                        setImportStatus(null);
                     });
                 }
 
                 function showFilePreview(file) {
                     if (!file.name.toLowerCase().endsWith('.xlsx')) {
-                        importStatus.textContent = 'Choose an .xlsx Excel file.';
+                        setImportStatus('error', 'Please choose a valid .xlsx Excel file.');
                         addStudentsBtn.disabled = true;
                         return;
                     }
@@ -1016,7 +1166,7 @@
                     filePreview.classList.remove('hidden');
                     dropZone.style.display = 'none';
                     addStudentsBtn.disabled = false;
-                    importStatus.textContent = '';
+                    setImportStatus(null);
                 }
 
                 addStudentsBtn.addEventListener('click', async () => {
@@ -1026,20 +1176,33 @@
                     form.append('mentor_user', mentorUser);
                     form.append('file', file);
                     addStudentsBtn.disabled = true;
-                    importStatus.textContent = 'Importing students...';
+                    setImportStatus('loading', 'Importing and syncing students...');
                     try {
                         const response = await fetch('http://127.0.0.1:8000/mentor/students/import', {
                             method: 'POST', body: form
                         });
                         const result = await response.json();
                         if (!response.ok) throw new Error(result.detail || 'Import failed.');
-                        importStatus.textContent = `Imported ${result.added} students; updated ${result.updated}. The list now shows students assigned to ${mentorUser}.`;
+
+                        let successMsg = '';
+                        if (result.added > 0 && result.updated > 0) {
+                            successMsg = `Imported ${result.added} new student${result.added > 1 ? 's' : ''} & updated ${result.updated} for ${mentorUser}.`;
+                        } else if (result.added > 0) {
+                            successMsg = `Successfully added ${result.added} student${result.added > 1 ? 's' : ''} assigned to ${mentorUser}.`;
+                        } else if (result.updated > 0) {
+                            successMsg = `Successfully updated ${result.updated} student record${result.updated > 1 ? 's' : ''} for ${mentorUser}.`;
+                        } else {
+                            successMsg = `Student roster is up to date for ${mentorUser}.`;
+                        }
+
+                        setImportStatus('success', successMsg);
                         fileInput.value = '';
                         filePreview.classList.add('hidden');
                         dropZone.style.display = '';
                         await loadStudents();
+                        await loadAssignedGroups();
                     } catch (error) {
-                        importStatus.textContent = error.message || 'Could not import students.';
+                        setImportStatus('error', error.message || 'Could not import students.');
                         addStudentsBtn.disabled = false;
                     }
                 });
