@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import main
-from models import Base, Mentor
+from models import Base, Mentor, Student
 
 
 def workbook_bytes(rows):
@@ -97,7 +97,41 @@ class MentorRosterTests(unittest.TestCase):
         students = self.client.get("/mentor/students", params={"mentor_user": "Dr Rao"}).json()
         self.assertEqual([s["student_name"] for s in students], ["Krishna K", "Naman Gandhi", "Ovee Wakchaure"])
         self.assertEqual([s["team_name"] for s in students], ["5", "5", "5"])
+        self.assertEqual([s["group_number"] for s in students], ["5", "5", "5"])
         self.assertEqual([s["project_name"] for s in students], ["New idea", "New idea", "New idea"])
+
+    def test_edit_and_delete_affect_only_the_mentors_roster(self):
+        data = workbook_bytes([
+            ["Student Name", "PRN", "Mentor Name", "Group"],
+            ["Asha Patil", "S001", "Dr Rao", 5],
+            ["Vivek Das", "S002", "Dr Shah", 6],
+        ])
+        with self.session_factory() as session:
+            session.add(Student(roll_no="S001", password="saved-login", year="3rd Year"))
+            session.commit()
+        imported = self.client.post(
+            "/mentor/students/import", data={"mentor_user": "Dr Rao"}, files={"file": ("roster.xlsx", data)}
+        )
+        self.assertEqual(imported.status_code, 200)
+        rao = self.client.get("/mentor/students", params={"mentor_user": "Dr Rao"}).json()[0]
+        shah = self.client.get("/mentor/students", params={"mentor_user": "Dr Shah"}).json()[0]
+
+        payload = {
+            "mentor_user": "Dr Rao", "student_name": "Asha P", "prn": "S001",
+            "group_number": "16", "project_name": "Updated Project", "year": "3rd Year",
+        }
+        self.assertEqual(self.client.put(f"/mentor/students/{shah['id']}", json=payload).status_code, 404)
+        self.assertEqual(self.client.delete(f"/mentor/students/{shah['id']}", params={"mentor_user": "Dr Rao"}).status_code, 404)
+        self.assertEqual(self.client.put(f"/mentor/students/{rao['id']}", json=payload).status_code, 200)
+        updated = self.client.get("/mentor/students", params={"mentor_user": "Dr Rao"}).json()[0]
+        self.assertEqual((updated["student_name"], updated["group_number"], updated["project_name"]),
+                         ("Asha P", "16", "Updated Project"))
+
+        self.assertEqual(self.client.delete(f"/mentor/students/{rao['id']}", params={"mentor_user": "Dr Rao"}).status_code, 200)
+        self.assertEqual(self.client.get("/mentor/students", params={"mentor_user": "Dr Rao"}).json(), [])
+        self.assertEqual(len(self.client.get("/mentor/students", params={"mentor_user": "Dr Shah"}).json()), 1)
+        with self.session_factory() as session:
+            self.assertIsNotNone(session.query(Student).filter(Student.roll_no == "S001").first())
 
 
 if __name__ == "__main__":

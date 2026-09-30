@@ -76,6 +76,14 @@ class MentorLoginRequest(BaseModel):
     username: str
     password: str
 
+class MentorStudentUpdate(BaseModel):
+    mentor_user: str
+    student_name: str
+    prn: str = ""
+    group_number: str = ""
+    project_name: str = ""
+    year: str = ""
+
 # Endpoints
 @app.get("/chat-stream")
 async def chat_stream(prompt: str):
@@ -462,7 +470,7 @@ async def import_mentor_students(
 
 
 @app.get("/mentor/students")
-def get_mentor_students(mentor_user: str) -> list[dict[str, str]]:
+def get_mentor_students(mentor_user: str) -> list[dict[str, str | int]]:
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
@@ -482,17 +490,72 @@ def get_mentor_students(mentor_user: str) -> list[dict[str, str]]:
                     if team:
                         team_name = team.team_name or "No Group"
                         project = db.query(Project).filter(Project.team_name == team.team_name).first()
-                        if project:
+                        if project and not entry.project_name:
                             project_name = project.project_name or "No Project"
             result.append({
+                "id": entry.id,
                 "student_name": entry.student_name,
                 "prn": entry.prn or "",
                 "mentor_name": entry.mentor_name,
                 "year": entry.year or "",
+                "group_number": entry.group_name or "",
                 "team_name": team_name,
                 "project_name": project_name,
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1",
             })
         return result
+    finally:
+        db.close()
+
+
+@app.put("/mentor/students/{roster_id}")
+def update_mentor_student(roster_id: int, data: MentorStudentUpdate):
+    db = SessionLocal()
+    try:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        entry = db.query(MentorStudent).filter(
+            MentorStudent.id == roster_id,
+            MentorStudent.mentor_key == mentor_key(mentor.username),
+        ).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="Student is not in your roster.")
+        name = " ".join(data.student_name.split())
+        if not name:
+            raise HTTPException(status_code=400, detail="Student name is required.")
+        prn = data.prn.strip()
+        if prn and db.query(MentorStudent).filter(
+            MentorStudent.prn == prn,
+            MentorStudent.id != roster_id,
+        ).first():
+            raise HTTPException(status_code=409, detail="Another student already has this PRN.")
+        entry.student_name = name
+        entry.prn = prn or None
+        entry.group_name = data.group_number.strip() or None
+        entry.project_name = data.project_name.strip() or None
+        entry.year = data.year.strip() or None
+        db.commit()
+        return {"message": "Student updated."}
+    finally:
+        db.close()
+
+
+@app.delete("/mentor/students/{roster_id}")
+def delete_mentor_student(roster_id: int, mentor_user: str):
+    db = SessionLocal()
+    try:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        entry = db.query(MentorStudent).filter(
+            MentorStudent.id == roster_id,
+            MentorStudent.mentor_key == mentor_key(mentor.username),
+        ).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="Student is not in your roster.")
+        db.delete(entry)
+        db.commit()
+        return {"message": "Student removed from mentor roster."}
     finally:
         db.close()

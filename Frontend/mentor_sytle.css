@@ -1261,6 +1261,45 @@ input[type="password"]:focus {
     border-bottom: none;
 }
 
+#view-student-list .mentor-table .student-group-row,
+#view-student-list .mentor-table .student-group-row:hover {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+#view-student-list .student-group-row td {
+    padding: 12px 20px;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.student-group-row i {
+    margin-right: 6px;
+}
+
+.student-group-count {
+    margin-left: 12px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.student-group-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.student-no-match td {
+    text-align: center;
+    color: var(--text-muted);
+}
+
 .project-name {
     font-weight: 600;
     color: var(--text-main);
@@ -1311,6 +1350,52 @@ input[type="password"]:focus {
     border-color: var(--primary);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.student-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.student-row-actions .btn-table-action {
+    padding: 7px 10px;
+}
+
+.student-delete-action {
+    color: #b91c1c;
+    border-color: rgba(185, 28, 28, 0.2);
+    background: rgba(185, 28, 28, 0.05);
+}
+
+.student-delete-action:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
+}
+
+.student-list-feedback,
+.student-roster-error {
+    margin: 0;
+    padding: 0 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.student-list-feedback:not(:empty) {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+.student-roster-error:not(:empty) {
+    padding: 0 0 1rem;
+    color: #b91c1c;
+}
+
+#student-roster-modal .modal-input:disabled {
+    background: rgba(99, 102, 241, 0.04);
+    color: var(--text-main);
+    opacity: 1;
 }
 
 .btn-axiom-ai {
@@ -1479,15 +1564,104 @@ input[type="password"]:focus {
     color: var(--status-danger);
 }
 
+.upload-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    padding: 1.25rem 2rem 1.75rem 2rem;
+}
+
 .upload-submit-btn {
-    margin: 1.5rem 2rem 2rem 2rem;
+    margin: 0;
     flex: unset;
-    padding: 14px 28px;
+    padding: 12px 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    transition: all 0.2s ease;
 }
 
 .upload-submit-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
+}
+
+.student-import-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.65rem 1.15rem;
+    border-radius: 999px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.4;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: statusSlideIn 0.3s ease-out;
+}
+
+.student-import-status.hidden {
+    display: none;
+}
+
+.student-import-status.status-success {
+    background: rgba(16, 185, 129, 0.12);
+    color: #065f46;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.student-import-status.status-success i {
+    color: var(--status-verified);
+    font-size: 1.15rem;
+}
+
+.student-import-status.status-loading {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1e40af;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.student-import-status.status-loading i {
+    color: var(--status-checking);
+    font-size: 1.15rem;
+}
+
+.student-import-status.status-error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #991b1b;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.student-import-status.status-error i {
+    color: var(--status-danger);
+    font-size: 1.15rem;
+}
+
+.student-import-status.status-info {
+    background: rgba(99, 102, 241, 0.1);
+    color: #3730a3;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.student-import-status.status-info i {
+    color: var(--primary);
+    font-size: 1.15rem;
+}
+
+@keyframes statusSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Responsive for mentor dashboard */
@@ -1577,6 +1751,14 @@ input[type="password"]:focus {
     flex-direction: column;
     gap: 0.5rem;
     overflow-y: auto;
+}
+
+.group-empty-state {
+    margin: 0;
+    padding: 1rem 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
 .group-item {
