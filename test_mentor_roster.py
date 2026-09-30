@@ -97,6 +97,7 @@ class MentorRosterTests(unittest.TestCase):
         students = self.client.get("/mentor/students", params={"mentor_user": "Dr Rao"}).json()
         self.assertEqual([s["student_name"] for s in students], ["Krishna K", "Naman Gandhi", "Ovee Wakchaure"])
         self.assertEqual([s["team_name"] for s in students], ["5", "5", "5"])
+        self.assertEqual([s["group_number"] for s in students], ["5", "5", "5"])
         self.assertEqual([s["project_name"] for s in students], ["New idea", "New idea", "New idea"])
 
 

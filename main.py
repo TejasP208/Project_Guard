@@ -467,6 +467,7 @@ def get_mentor_students(mentor_user: str):
                 "prn": entry.prn or "",
                 "mentor_name": entry.mentor_name,
                 "year": entry.year or "",
+                "group_number": entry.group_name or "",
                 "team_name": team_name,
                 "project_name": project_name,
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1",

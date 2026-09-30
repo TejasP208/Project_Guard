@@ -641,20 +641,40 @@
                     if (students.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No students assigned to you yet. Upload an Excel sheet to add them.</td></tr>';
                     } else {
-                        tbody.innerHTML = students.map(s => `
-                            <tr>
+                        const groupLabel = number => {
+                            const value = String(number || '').trim();
+                            return value ? (/^group\b/i.test(value) ? value : `Group ${value}`) : 'Unassigned';
+                        };
+                        const groups = new Map();
+                        students.forEach(student => {
+                            const label = groupLabel(student.group_number);
+                            if (!groups.has(label)) groups.set(label, []);
+                            groups.get(label).push(student);
+                        });
+                        const groupNames = [...groups.keys()].sort((a, b) => {
+                            if (a === 'Unassigned') return 1;
+                            if (b === 'Unassigned') return -1;
+                            return a.localeCompare(b, undefined, { numeric: true });
+                        });
+                        tbody.innerHTML = groupNames.map(label => `
+                            <tr class="student-group-row" data-group="${escapeHtml(label)}">
+                                <td colspan="7"><i class="ph ph-users-three"></i> <strong>${escapeHtml(label)}</strong><span class="student-group-count">${groups.get(label).length} students</span></td>
+                            </tr>
+                            ${groups.get(label).map(s => `
+                            <tr class="student-data-row" data-group="${escapeHtml(label)}">
                                 <td class="student-name-cell">
                                     <div class="table-avatar"><i class="ph-fill ph-user"></i></div>
-                                    <div><strong>${escapeHtml(s.student_name)}</strong>${s.year ? `<small> ${escapeHtml(s.year)}</small>` : ''}</div>
+                                    <div><strong>${escapeHtml(s.student_name)}</strong> <span class="student-group-badge">${escapeHtml(label)}</span>${s.year ? `<small> ${escapeHtml(s.year)}</small>` : ''}</div>
                                 </td>
                                 <td>${escapeHtml(s.prn || '—')}</td>
                                 <td>${escapeHtml(s.mentor_name)}</td>
-                                <td>${escapeHtml(s.team_name)}</td>
+                                <td>${escapeHtml(label)}</td>
                                 <td>${escapeHtml(s.project_name)}</td>
                                 <td><span class="chip ${s.submissions === '0 / 1' ? 'pending' : 'verified'}">${escapeHtml(s.submissions)}</span></td>
                                 <td><button class="btn-table-action" type="button" title="View student"><i class="ph ph-eye"></i> View</button></td>
                             </tr>
-                        `).join('');
+                            `).join('')}
+                        `).join('') + '<tr class="student-no-match" hidden><td colspan="7">No students match your search.</td></tr>';
                     }
 
                     // Update dashboard stat
@@ -680,7 +700,27 @@
                 });
             }
             setupSearch('project-search', 'view-project-list');
-            setupSearch('student-search', 'view-student-list');
+            document.getElementById('student-search').addEventListener('input', event => {
+                const query = event.target.value.trim().toLowerCase();
+                const tbody = document.querySelector('#view-student-list .mentor-table tbody');
+                let visibleTotal = 0;
+                tbody.querySelectorAll('.student-group-row').forEach(header => {
+                    const label = header.dataset.group.toLowerCase();
+                    let visibleInGroup = 0;
+                    let row = header.nextElementSibling;
+                    while (row && row.classList.contains('student-data-row')) {
+                        const show = !query || label.includes(query) || row.textContent.toLowerCase().includes(query);
+                        row.hidden = !show;
+                        if (show) visibleInGroup++;
+                        row = row.nextElementSibling;
+                    }
+                    header.hidden = visibleInGroup === 0;
+                    header.querySelector('.student-group-count').textContent = `${visibleInGroup} students`;
+                    visibleTotal += visibleInGroup;
+                });
+                const noMatch = tbody.querySelector('.student-no-match');
+                if (noMatch) noMatch.hidden = visibleTotal > 0;
+            });
 
             // Schedule Review Modal Logic
             document.getElementById('review-form').addEventListener('submit', function(e) {
