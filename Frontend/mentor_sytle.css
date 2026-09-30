@@ -1276,13 +1276,6 @@ input[type="password"]:focus {
     margin-right: 6px;
 }
 
-.student-group-count {
-    margin-left: 12px;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-weight: 400;
-}
-
 .student-group-badge {
     display: inline-block;
     margin-left: 6px;

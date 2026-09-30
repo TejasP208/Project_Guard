@@ -687,7 +687,7 @@
                         });
                         tbody.innerHTML = groupNames.map(label => `
                             <tr class="student-group-row" data-group="${escapeHtml(label)}">
-                                <td colspan="7"><i class="ph ph-users-three"></i> <strong>${escapeHtml(label)}</strong><span class="student-group-count">${groups.get(label).length} students</span></td>
+                                <td colspan="7"><i class="ph ph-users-three"></i> <strong>${escapeHtml(label)}</strong></td>
                             </tr>
                             ${groups.get(label).map(s => `
                             <tr class="student-data-row" data-group="${escapeHtml(label)}">
@@ -840,7 +840,6 @@
                         row = row.nextElementSibling;
                     }
                     header.hidden = visibleInGroup === 0;
-                    header.querySelector('.student-group-count').textContent = `${visibleInGroup} students`;
                     visibleTotal += visibleInGroup;
                 });
                 const noMatch = tbody.querySelector('.student-no-match');

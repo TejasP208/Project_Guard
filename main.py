@@ -479,7 +479,7 @@ def get_mentor_students(mentor_user: str) -> list[dict[str, str | int]]:
         roster: list[MentorStudent] = db.query(MentorStudent).filter(
             MentorStudent.mentor_key == mentor_key(mentor.username)
         ).order_by(MentorStudent.student_name).all()
-        result: list[dict[str, str]] = []
+        result: list[dict[str, str | int]] = []
         for entry in roster:
             team_name = entry.group_name or "No Group"
             project_name = entry.project_name or "No Project"
