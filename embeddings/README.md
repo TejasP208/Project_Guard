@@ -33,9 +33,10 @@ The project index uses `"{project_name}. {project_abstract}"`; changing this
 format requires re-embedding indexed projects. For plagiarism checks, the
 title/description and all extracted document chunks are embedded separately.
 The strongest chunk match is used for each stored project. Documents are
-split into chunks of up to 3000 characters with a 200-character overlap.
-More than 32 document chunks produces an error instead of silently ignoring
-the end of the document. `embed_many(texts)` batches up to eight texts per
+split into chunks of up to 3000 characters with a 200-character overlap,
+preferring sentence boundaries and then word boundaries. More than 32 document
+chunks produces a clear error before scoring; this cap also applies to the
+extracted text used by the lexical score. `embed_many(texts)` batches up to eight texts per
 Cloudflare request and returns one vector for each input in order.
 
 The combined TF-IDF/Qwen score and 30% frontend cutoff are provisional. To
