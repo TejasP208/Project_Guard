@@ -184,7 +184,7 @@
 
                             <!-- Drag & Drop Area -->
                             <div class="form-group">
-                                <label>Upload Project File</label>
+                                <label>Upload Project File (Optional)</label>
                                 <div class="drop-zone" id="drop-zone">
                                     <div class="drop-zone-content">
                                         <div class="upload-icon-wrapper">
@@ -192,9 +192,9 @@
                                         </div>
                                         <h3>Drag & Drop your files here</h3>
                                         <p>or click to browse</p>
-                                        <span class="file-formats">Supported formats: PDF, DOCX, ZIP (Max 50MB)</span>
+                                        <span class="file-formats">PDF, DOCX, TXT · Max 20 MB · Extracted text: max 10,000 characters / 2,000 lines; first 500 characters are checked</span>
                                     </div>
-                                    <input type="file" id="file-input" hidden accept=".pdf,.docx,.zip">
+                                    <input type="file" id="file-input" hidden accept=".pdf,.docx,.txt">
                                 </div>
 
                                 <!-- State: Upload Progress (Hidden initially) -->
@@ -215,6 +215,7 @@
                                         <span id="upload-percentage">0%</span>
                                     </div>
                                 </div>
+                                <p class="upload-error" id="upload-error" role="alert" aria-live="polite" hidden></p>
                             </div>
 
                             <!-- Evaluation Status Area (Hidden initially) -->
@@ -243,12 +244,11 @@
 
                             <!-- Actions -->
                             <div class="form-actions">
-                                <button type="button" class="btn btn-secondary" id="btn-check" disabled>
+                                <button type="button" class="btn btn-secondary" id="btn-check">
                                     <i class="ph-fill ph-shield-check"></i>
                                     Check Plagiarism
                                 </button>
-                                <button onclick="submitProject()" type="submit" class="btn btn-primary" id="btn-submit"
-                                    disabled>
+                                <button onclick="submitProject()" type="submit" class="btn btn-primary" id="btn-submit">
                                     <i class="ph ph-upload-simple"></i>
                                     Submit Your Project
                                 </button>

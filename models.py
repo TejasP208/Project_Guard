@@ -1,7 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text
-from sqlalchemy.orm import declarative_base
+from pgvector.sqlalchemy import VECTOR
+from sqlalchemy import Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
+
 
 
 class GroupMessage(Base):
@@ -19,88 +23,91 @@ class GroupMessage(Base):
 class Student(Base):
     __tablename__ = "students"
 
-    id = Column(Integer, primary_key=True, index=True)
-    roll_no = Column(String, unique=True, index=True)
-    password = Column(String)
-    year = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    roll_no: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
+    password: Mapped[str] = mapped_column(String, nullable=True)
+    year: Mapped[str | None] = mapped_column(String, nullable=True)
+
 
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(Integer, primary_key=True, index=True)
-    year = Column(String)
-    group_no = Column(Integer)
-    project_name = Column(String)
-    project_abstract = Column(String)
-    team_name = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    year: Mapped[str | None] = mapped_column(String, nullable=True)
+    group_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    project_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    project_abstract: Mapped[str | None] = mapped_column(String, nullable=True)
+    team_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Cloudflare Qwen3 embeddings are 1024-dimensional and nullable until indexed.
+    embedding: Mapped[list[float] | None] = mapped_column(VECTOR(1024), nullable=True)
+
 
 class Mentor(Base):
     __tablename__ = "mentors"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    password = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=True)
+    password: Mapped[str] = mapped_column(String, nullable=True)
 
 
 class MentorStudent(Base):
     __tablename__ = "mentor_students"
 
-    id = Column(Integer, primary_key=True, index=True)
-    mentor_name = Column(String, nullable=False)
-    mentor_key = Column(String, index=True, nullable=False)
-    student_name = Column(String, nullable=False)
-    prn = Column(String, nullable=True)
-    group_name = Column(String, nullable=True)
-    project_name = Column(String, nullable=True)
-    year = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    mentor_name: Mapped[str] = mapped_column(String, nullable=False)
+    mentor_key: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    student_name: Mapped[str] = mapped_column(String, nullable=False)
+    prn: Mapped[str | None] = mapped_column(String, nullable=True)
+    group_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    project_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    year: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class MentorReview(Base):
     __tablename__ = "mentor_reviews"
 
-    id = Column(Integer, primary_key=True, index=True)
-    mentor_name = Column(String, nullable=False)
-    mentor_key = Column(String, index=True, nullable=False)
-    group_name = Column(String, nullable=False)
-    review_type = Column(String, nullable=False)
-    review_date = Column(String, nullable=False)
-    review_time = Column(String, nullable=False)
-    notes = Column(Text, nullable=True)
-    status = Column(String, nullable=False, default="scheduled")
-    created_at = Column(String, nullable=False)
-    completed_at = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    mentor_name: Mapped[str] = mapped_column(String, nullable=False)
+    mentor_key: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    group_name: Mapped[str] = mapped_column(String, nullable=False)
+    review_type: Mapped[str] = mapped_column(String, nullable=False)
+    review_date: Mapped[str] = mapped_column(String, nullable=False)
+    review_time: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="scheduled")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-# 🔥 Team table
 class Team(Base):
     __tablename__ = "teams"
 
-    id = Column(Integer, primary_key=True)
-    team_name = Column(String, unique=True)
-    password = Column(String)
-    year = Column(String)
-    mentor_name = Column(String)
-    team_code = Column(String, unique=True)
-    description = Column(String, nullable=True)
-    max_members = Column(Integer, default=4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Team names are not unique in existing project data; team_code is the identifier.
+    team_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    password: Mapped[str | None] = mapped_column(String, nullable=True)
+    year: Mapped[str | None] = mapped_column(String, nullable=True)
+    mentor_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    max_members: Mapped[int | None] = mapped_column(Integer, default=4, nullable=True)
 
 
-# 🔥 Members table
 class TeamMember(Base):
     __tablename__ = "team_members"
 
-    id = Column(Integer, primary_key=True)
-    team_id = Column(Integer)
-    roll_no = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    roll_no: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class TeamInvitation(Base):
     __tablename__ = "team_invitations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    team_id = Column(Integer, index=True, nullable=False)
-    inviter_roll_no = Column(String, nullable=False)
-    invitee_roll_no = Column(String, index=True, nullable=False)
-    status = Column(String, index=True, nullable=False, default="pending")
-    created_at = Column(String, nullable=False)
-    responded_at = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    team_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    inviter_roll_no: Mapped[str] = mapped_column(String, nullable=False)
+    invitee_roll_no: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String, index=True, nullable=False, default="pending")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    responded_at: Mapped[str | None] = mapped_column(String, nullable=True)

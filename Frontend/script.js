@@ -287,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressBar = document.getElementById('upload-progress-bar');
     const uploadPercentage = document.getElementById('upload-percentage');
     const uploadStatusText = document.getElementById('upload-status-text');
+    const uploadError = document.getElementById('upload-error');
 
     // Buttons
     const btnSubmit = document.getElementById('btn-submit');
@@ -306,6 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // File state
     let currentFile = null;
+    const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+    const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'txt']);
 
     // --- Drag and Drop Logic --- //
 
@@ -348,8 +351,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleFiles(files) {
         if (files.length > 0) {
-            // Check file type / validation here if needed
-            currentFile = files[0];
+            const file = files[0];
+            currentFile = null;
+            const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+            if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
+                showUploadError('Unsupported file type. Choose a PDF, DOCX, or TXT file.');
+                fileInput.value = '';
+                return;
+            }
+            if (file.size > MAX_DOCUMENT_BYTES) {
+                showUploadError('This file is larger than 20 MB. Choose a smaller PDF, DOCX, or TXT file.');
+                fileInput.value = '';
+                return;
+            }
+            uploadStatusText.style.color = 'var(--text-muted)';
+            currentFile = file;
             startUploadSimulation(currentFile.name);
         }
     }
@@ -365,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
         uploadPercentage.textContent = '0%';
         uploadStatusText.textContent = 'Uploading...';
+        clearUploadError();
 
         // Reset eval state
         resetEvalState();
@@ -387,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function finishUpload() {
-        uploadStatusText.textContent = 'Upload Complete';
+        uploadStatusText.textContent = 'Ready to check';
         uploadStatusText.style.color = 'var(--status-verified)';
         progressBar.style.background = 'var(--status-verified)';
 
@@ -396,16 +413,32 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCheck.disabled = false;
     }
 
+    function showUploadError(message) {
+        if (uploadError) {
+            uploadError.textContent = message;
+            uploadError.hidden = false;
+        } else {
+            alert(message);
+        }
+    }
+
+    function clearUploadError() {
+        if (!uploadError) return;
+        uploadError.textContent = '';
+        uploadError.hidden = true;
+    }
+
     // --- Remove File Logic --- //
     removeFileBtn.addEventListener('click', () => {
         currentFile = null;
         fileInput.value = '';
+        clearUploadError();
         dropZone.style.display = 'block';
         uploadProgressArea.style.display = 'none';
         evalPanel.style.display = 'none';
 
-        btnSubmit.disabled = true;
-        btnCheck.disabled = true;
+        btnSubmit.disabled = false;
+        btnCheck.disabled = false;
         progressBar.style.background = 'linear-gradient(90deg, var(--primary), var(--secondary))';
         uploadStatusText.style.color = 'var(--text-muted)';
     });
@@ -413,8 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Anti-Gravity Checking Simulation --- //
     btnCheck.addEventListener('click', async () => {
-        if (!currentFile) return;
-
         // Ui State Updates
         btnCheck.disabled = true;
         btnCheck.innerHTML = '<i class="ph-fill ph-spinner-gap ph-spin"></i> Checking...';
@@ -422,6 +453,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chipPending.style.display = 'none';
         chipChecking.style.display = 'inline-flex';
+        evalPanel.style.display = 'block';
+        clearUploadError();
 
         const title = document.getElementById("project-title").value.trim();
         const desc = document.getElementById("project-desc") ? document.getElementById("project-desc").value.trim() : "";
@@ -429,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append("title", title);
         formData.append("description", desc);
-        formData.append("file", currentFile);
+        if (currentFile) formData.append("file", currentFile);
 
         try {
             const response = await fetch("http://127.0.0.1:8000/check-plagiarism", {
@@ -440,15 +473,22 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (response.ok) {
                 finishChecking(data);
+                if (data.document_text_truncated) {
+                    showUploadError('The document is within the upload limits, but only its first 500 extracted characters were checked.');
+                }
             } else {
-                alert(data.detail || "Error checking plagiarism");
+                showUploadError(data.detail || "The document could not be checked. Review the file and try again.");
+                uploadStatusText.textContent = 'Needs attention';
+                uploadStatusText.style.color = 'var(--status-danger, #b42318)';
                 resetEvalState();
                 btnCheck.innerHTML = '<i class="ph-fill ph-shield-check"></i> Check Plagiarism';
                 btnSubmit.disabled = true;
             }
         } catch (err) {
             console.error(err);
-            alert("Failed to connect to the server.");
+            showUploadError('Could not reach the checking service. Check your connection and try again.');
+            uploadStatusText.textContent = 'Needs attention';
+            uploadStatusText.style.color = 'var(--status-danger, #b42318)';
             resetEvalState();
             btnCheck.innerHTML = '<i class="ph-fill ph-shield-check"></i> Check Plagiarism';
             btnSubmit.disabled = true;

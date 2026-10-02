@@ -11,4 +11,8 @@ venv/
 .venv/
 
 # macOS-generated metadata
+<<<<<<< HEAD
 .DS_Store
+=======
+.DS_Store
+>>>>>>> origin/main

@@ -371,6 +371,7 @@
                     <textarea id="review-notes" class="modal-textarea" rows="3" placeholder="Add any notes for the review..."></textarea>
                 </div>
                 <div class="modal-actions">
+                    <span id="review-form-error" class="student-roster-error" role="alert"></span>
                     <button type="button" class="btn btn-secondary" onclick="document.getElementById('review-modal').classList.remove('active')">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="btn-confirm-review">
                         <i class="ph ph-check-circle"></i> Confirm Schedule
@@ -454,7 +455,6 @@
                 <div class="form-group"><label for="roster-student-year">Year</label><input class="modal-input" id="roster-student-year"></div>
                 <p id="student-roster-error" class="student-roster-error" role="alert"></p>
                 <div class="modal-actions">
-                    <span id="review-form-error" class="student-roster-error" role="alert"></span>
                     <button type="button" class="btn btn-secondary" id="student-roster-cancel">Close</button>
                     <button type="submit" class="btn btn-primary" id="student-roster-save"><i class="ph ph-check"></i> Save Changes</button>
                 </div>
@@ -812,7 +812,7 @@
                         });
                         tbody.innerHTML = groupNames.map(label => `
                             <tr class="student-group-row" data-group="${escapeHtml(label)}">
-                                <td colspan="7"><i class="ph ph-users-three"></i> <strong>${escapeHtml(label)}</strong><span class="student-group-count">${groups.get(label).length} students</span></td>
+                                <td colspan="7"><i class="ph ph-users-three"></i> <strong>${escapeHtml(label)}</strong></td>
                             </tr>
                             ${groups.get(label).map(s => `
                             <tr class="student-data-row" data-group="${escapeHtml(label)}">
@@ -1008,7 +1008,6 @@
                         row = row.nextElementSibling;
                     }
                     header.hidden = visibleInGroup === 0;
-                    header.querySelector('.student-group-count').textContent = `${visibleInGroup} students`;
                     visibleTotal += visibleInGroup;
                 });
                 const noMatch = tbody.querySelector('.student-no-match');
