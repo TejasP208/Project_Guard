@@ -12,6 +12,7 @@
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="group_connect.css">
 </head>
 
 <body>
@@ -41,6 +42,10 @@
                 <a href="#" class="nav-item" id="nav-team">
                     <i class="ph ph-users"></i>
                     <span>Find your Team</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-group-connect">
+                    <i class="ph ph-chats-teardrop"></i>
+                    <span>Group Connect</span>
                 </a>
             </nav>
 
@@ -450,6 +455,60 @@
                 </div>
             </div>
 
+            <!-- View: Group Connect (Group Specific Chat & Meet Room) -->
+            <div id="view-group-connect" class="content-view hidden" data-role="student">
+                <header class="top-header">
+                    <div><h1 class="page-title">Group Connect</h1>
+                    <p class="page-subtitle">Chat with your mentor and group, share meeting links, and view scheduled reviews.</p></div>
+                </header>
+                <p id="group-connect-error" class="group-connect-feedback" role="status"></p>
+                <div class="group-connect-layout">
+                    <!-- Left Sidebar: Group Selector -->
+                    <div class="card glass-card group-sidebar-card">
+                        <div class="group-list-header">
+                            <span><i class="ph ph-users-three" style="color: var(--primary);"></i> My Groups</span>
+                            <span class="chip" style="font-size: 0.72rem;" id="total-groups-badge">0 Groups</span>
+                        </div>
+                        <div class="group-item-list" id="group-selector-list">
+                            <!-- Group list items dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Group Direct Chat & Video Call Room -->
+                    <div class="card glass-card chat-room-card">
+                        <div class="chat-room-header">
+                            <div class="chat-room-info">
+                                <h4 id="active-group-title">Select a group</h4>
+                                <span id="active-group-members"></span>
+                            </div>
+                            <div class="chat-room-actions">
+                                <button class="btn btn-secondary btn-sm" id="btn-start-instant-meet" type="button" style="display: flex; align-items: center; gap: 6px; padding: 0.5rem 0.9rem; font-size: 0.85rem;" title="Start video meeting with this group">
+                                    <i class="ph-fill ph-video-camera" style="color: var(--primary);"></i> Start Meet
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="group-connect-reviews" class="group-connect-reviews"></div>
+                        <!-- Chat Messages Stream -->
+                        <div class="chat-messages-body" id="group-chat-stream" role="log" aria-label="Group conversation" aria-live="polite">
+                            <!-- Dynamically loaded chat bubbles -->
+                        </div>
+
+                        <!-- Chat Input Bar -->
+                        <form class="chat-input-bar" id="group-chat-form">
+                            <button type="button" class="btn btn-secondary" id="btn-chat-send-meet-link" title="Share a Google Meet link with the group">
+                                <i class="ph-fill ph-video-camera" style="color: var(--primary); font-size: 1.1rem;"></i><span>Share Meet Link</span>
+                            </button>
+                            <input type="text" id="group-chat-input" maxlength="4000" aria-label="Message your group" class="chat-input-field" placeholder="Type a message to your mentor and group..." required autocomplete="off">
+                            <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.2rem; display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                                <span>Send</span>
+                                <i class="ph ph-paper-plane-right"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -524,6 +583,7 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="group_connect.js"></script>
 </body>
 
 </html>

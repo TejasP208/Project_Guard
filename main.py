@@ -15,12 +15,14 @@ import os
 from datetime import datetime
 from utils import generate_team_code
 from nlp.checker import run_plagiarism_check
+from group_connect import create_router
 
 # Initialize DB
 Base.metadata.create_all(bind=engine)
 migrate_database()
 
 app = FastAPI()
+app.include_router(create_router(lambda: SessionLocal()))
 
 # Middleware
 app.add_middleware(

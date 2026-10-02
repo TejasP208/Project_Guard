@@ -523,6 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'nav-find': 'view-find',
         'nav-submit': 'view-submit',
         'nav-team': 'view-team',
+        'nav-group-connect': 'view-group-connect',
         'nav-plagiarism': 'view-plagiarism',
         'nav-settings': 'view-settings'
     };

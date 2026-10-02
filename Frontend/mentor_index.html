@@ -11,6 +11,8 @@
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="mentor_sytle.css">
+    <link rel="stylesheet" href="group_connect.css">
+    <script src="group_connect.js" defer></script>
 </head>
 <body>
     <div class="app-container">
@@ -274,7 +276,8 @@
                 </div>
             </div>
             <!-- View: Group Connect (Group Specific Chat & Meet Room) -->
-            <div id="view-group-connect" class="content-view hidden">
+            <div id="view-group-connect" class="content-view hidden" data-role="mentor">
+                <p id="group-connect-error" class="group-connect-feedback" role="status"></p>
                 <div class="group-connect-layout">
                     <!-- Left Sidebar: Group Selector -->
                     <div class="card glass-card group-sidebar-card">
@@ -304,17 +307,18 @@
                             </div>
                         </div>
 
+                        <div id="group-connect-reviews" class="group-connect-reviews"></div>
                         <!-- Chat Messages Stream -->
-                        <div class="chat-messages-body" id="group-chat-stream">
+                        <div class="chat-messages-body" id="group-chat-stream" role="log" aria-label="Group conversation" aria-live="polite">
                             <!-- Dynamically loaded chat bubbles -->
                         </div>
 
                         <!-- Chat Input Bar -->
                         <form class="chat-input-bar" id="group-chat-form">
-                            <button type="button" class="btn btn-secondary" id="btn-chat-send-meet-link" style="border-radius: 50%; width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Send instant video call link to group">
-                                <i class="ph-fill ph-video-camera" style="color: var(--primary); font-size: 1.1rem;"></i>
+                            <button type="button" class="btn btn-secondary" id="btn-chat-send-meet-link" title="Share a Google Meet link with the group">
+                                <i class="ph-fill ph-video-camera" style="color: var(--primary); font-size: 1.1rem;"></i><span>Share Meet Link</span>
                             </button>
-                            <input type="text" id="group-chat-input" class="chat-input-field" placeholder="Type a message or instruction for this group..." required autocomplete="off">
+                            <input type="text" id="group-chat-input" maxlength="4000" aria-label="Message your group" class="chat-input-field" placeholder="Type a message or instruction for this group..." required autocomplete="off">
                             <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.2rem; display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                                 <span>Send</span>
                                 <i class="ph ph-paper-plane-right"></i>
@@ -1136,218 +1140,9 @@
             // ============================================
             // Group Connect (Group Specific Chat & Meet) Logic
             // ============================================
-            let assignedGroups = [];
-            let currentGroupId = null;
-            const chatStorageKey = `groupConnectMessages:${mentorUser.trim().toLowerCase()}`;
-
-            function loadGroupChats() {
-                let saved = {};
-                try {
-                    saved = JSON.parse(localStorage.getItem(chatStorageKey) || '{}');
-                } catch (error) {
-                    console.warn('Could not read saved group messages:', error);
-                }
-                return assignedGroups.map(group => ({
-                    ...group,
-                    initialMessages: Array.isArray(saved[group.id]) ? saved[group.id] : []
-                }));
+            function loadAssignedGroups() {
+                return window.refreshGroupConnect?.();
             }
-
-            function saveGroupChats(data) {
-                const messages = Object.fromEntries(data.map(group => [group.id, group.initialMessages]));
-                localStorage.setItem(chatStorageKey, JSON.stringify(messages));
-            }
-
-            async function loadAssignedGroups() {
-                const container = document.getElementById('group-selector-list');
-                container.textContent = 'Loading assigned groups...';
-                try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
-                    if (!response.ok) throw new Error('Failed to load assigned groups');
-                    const students = await response.json();
-                    const byNumber = new Map();
-                    students.forEach(student => {
-                        const number = String(student.group_number || '').trim();
-                        if (!number) return;
-                        const id = `group-${number.toLowerCase()}`;
-                        if (!byNumber.has(id)) {
-                            byNumber.set(id, {
-                                id,
-                                name: /^group\b/i.test(number) ? number : `Group ${number}`,
-                                project: 'No Project',
-                                members: []
-                            });
-                        }
-                        const group = byNumber.get(id);
-                        group.members.push(student.student_name);
-                        if (group.project === 'No Project' && student.project_name && student.project_name !== 'No Project') {
-                            group.project = student.project_name;
-                        }
-                    });
-                    assignedGroups = [...byNumber.values()].sort((a, b) =>
-                        a.name.localeCompare(b.name, undefined, { numeric: true })
-                    );
-                    if (!assignedGroups.some(group => group.id === currentGroupId)) {
-                        currentGroupId = assignedGroups[0]?.id || null;
-                    }
-                    renderGroupSelectorList();
-                    renderActiveGroupRoom();
-                } catch (error) {
-                    console.error('Error loading assigned groups:', error);
-                    assignedGroups = [];
-                    currentGroupId = null;
-                    renderGroupSelectorList();
-                    renderActiveGroupRoom('Could not load assigned groups. Check the backend connection.');
-                }
-            }
-
-            function renderGroupSelectorList() {
-                const container = document.getElementById('group-selector-list');
-                if (!container) return;
-                const groups = loadGroupChats();
-
-                const badge = document.getElementById('total-groups-badge');
-                if (badge) badge.textContent = `${groups.length} Groups`;
-
-                if (groups.length === 0) {
-                    container.innerHTML = '<p class="group-empty-state">No groups assigned to this mentor.</p>';
-                    return;
-                }
-
-                container.innerHTML = groups.map(g => `
-                    <div class="group-item ${g.id === currentGroupId ? 'active' : ''}" data-id="${escapeHtml(g.id)}">
-                        <div class="group-item-title">
-                            <span>${escapeHtml(g.name)}</span>
-                            <i class="ph ph-caret-right" style="font-size: 0.8rem; opacity: 0.6;"></i>
-                        </div>
-                        <div class="group-item-sub">${escapeHtml(g.project)}</div>
-                    </div>
-                `).join('');
-
-                container.querySelectorAll('.group-item').forEach(el => {
-                    el.addEventListener('click', () => {
-                        currentGroupId = el.getAttribute('data-id');
-                        renderGroupSelectorList();
-                        renderActiveGroupRoom();
-                    });
-                });
-            }
-
-            function renderActiveGroupRoom(emptyMessage = 'No groups assigned to this mentor yet.') {
-                const groups = loadGroupChats();
-                const group = groups.find(g => g.id === currentGroupId) || groups[0];
-                const titleEl = document.getElementById('active-group-title');
-                const membersEl = document.getElementById('active-group-members');
-                const stream = document.getElementById('group-chat-stream');
-                const controls = document.querySelectorAll('#group-chat-form input, #group-chat-form button, #btn-start-instant-meet, #btn-schedule-group-meet');
-                controls.forEach(control => { control.disabled = !group; });
-                if (!group) {
-                    if (titleEl) titleEl.textContent = 'No assigned group';
-                    if (membersEl) membersEl.textContent = '';
-                    if (stream) stream.textContent = emptyMessage;
-                    return;
-                }
-
-                if (titleEl) titleEl.textContent = `${group.name} - ${group.project}`;
-                if (membersEl) membersEl.textContent = `Members: ${group.members.join(', ')}`;
-                if (!stream) return;
-
-                if (!group.initialMessages || group.initialMessages.length === 0) {
-                    stream.innerHTML = `<div style="text-align: center; color: var(--text-muted); margin: auto;"><i class="ph ph-chats-teardrop" style="font-size: 2.2rem; opacity: 0.4;"></i><p style="margin-top: 8px;">No messages in ${escapeHtml(group.name)} yet. Type a message below to start communicating.</p></div>`;
-                    return;
-                }
-
-                stream.innerHTML = group.initialMessages.map(msg => {
-                    if (msg.isMeet) {
-                        return `
-                            <div style="align-self: center; background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1)); border: 1px solid rgba(99,102,241,0.2); border-radius: 14px; padding: 0.85rem 1.25rem; display: flex; align-items: center; gap: 14px; margin: 0.5rem 0; width: 85%; max-width: 480px; box-shadow: 0 4px 14px rgba(99,102,241,0.08);">
-                                <div style="width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;">
-                                    <i class="ph-fill ph-video-camera"></i>
-                                </div>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.92rem;">🎥 ${escapeHtml(msg.title || 'Instant Video Call')}</div>
-                                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"><i class="ph ph-clock"></i> ${escapeHtml(msg.time)}</div>
-                                </div>
-                                <a href="${escapeHtml(msg.link)}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none; display: flex; align-items: center; gap: 4px; padding: 0.45rem 0.9rem; font-size: 0.82rem; white-space: nowrap;">
-                                    <i class="ph ph-arrow-square-out"></i> Join Meet
-                                </a>
-                            </div>
-                        `;
-                    }
-
-                    const isMentor = msg.sender === 'mentor';
-                    const senderName = isMentor ? 'You (Mentor)' : (msg.name || 'Student');
-
-                    return `
-                        <div class="chat-bubble ${isMentor ? 'mentor' : 'student'}">
-                            <span class="sender-label">${escapeHtml(senderName)}</span>
-                            <div>${escapeHtml(msg.text)}</div>
-                            <span class="chat-time">${escapeHtml(msg.time)}</span>
-                        </div>
-                    `;
-                }).join('');
-
-                stream.scrollTop = stream.scrollHeight;
-            }
-
-            function sendMeetToActiveGroup() {
-                const groups = loadGroupChats();
-                const groupIndex = groups.findIndex(g => g.id === currentGroupId);
-                if (groupIndex === -1) return;
-
-                const code = Math.random().toString(36).substring(2, 5) + '-' + 
-                             Math.random().toString(36).substring(2, 6) + '-' + 
-                             Math.random().toString(36).substring(2, 5);
-                const meetUrl = `https://meet.google.com/${code}`;
-                const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today';
-
-                groups[groupIndex].initialMessages.push({
-                    isMeet: true,
-                    title: `Video Call with ${groups[groupIndex].name}`,
-                    link: meetUrl,
-                    sender: 'mentor',
-                    time: nowTime
-                });
-
-                saveGroupChats(groups);
-                renderActiveGroupRoom();
-
-                // Open meet link in new tab
-                window.open(meetUrl, '_blank');
-            }
-
-            // Form message submit
-            const groupChatForm = document.getElementById('group-chat-form');
-            if (groupChatForm) {
-                groupChatForm.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    const input = document.getElementById('group-chat-input');
-                    const text = input ? input.value.trim() : '';
-                    if (!text) return;
-
-                    const groups = loadGroupChats();
-                    const groupIndex = groups.findIndex(g => g.id === currentGroupId);
-                    if (groupIndex === -1) return;
-
-                    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today';
-
-                    groups[groupIndex].initialMessages.push({
-                        sender: 'mentor',
-                        text: text,
-                        time: nowTime
-                    });
-
-                    saveGroupChats(groups);
-                    input.value = '';
-                    renderActiveGroupRoom();
-                });
-            }
-
-            // Quick meet buttons
-            const btnInstantMeet = document.getElementById('btn-start-instant-meet');
-            const btnChatSendMeet = document.getElementById('btn-chat-send-meet-link');
-            if (btnInstantMeet) btnInstantMeet.addEventListener('click', sendMeetToActiveGroup);
-            if (btnChatSendMeet) btnChatSendMeet.addEventListener('click', sendMeetToActiveGroup);
 
             // Initial render
             loadAssignedGroups();
