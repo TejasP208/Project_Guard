@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
             subTitle.textContent = `Welcome back, ${customStudentName}. Here's your project status.`;
         }
         fetchStudentTeam(activeUser);
+        loadTeamInvitations();
+        window.setInterval(loadTeamInvitations, 15000);
     }
 
     // Edit Profile Modal Logic
@@ -103,6 +105,119 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const inviteModal = document.getElementById('team-invite-modal');
+    const notificationsModal = document.getElementById('team-notifications-modal');
+    const inviteFeedback = document.getElementById('team-invite-feedback');
+    const inviteForm = document.getElementById('team-invite-form');
+    const escapeInviteHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+
+    function closeInviteModal() {
+        inviteModal.classList.remove('active');
+        inviteFeedback.textContent = '';
+        inviteFeedback.style.color = '';
+        inviteForm.reset();
+    }
+
+    async function loadTeamInvitations() {
+        if (!activeUser) return;
+        const list = document.getElementById('team-invitations-list');
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/team-invitations?roll_no=${encodeURIComponent(activeUser)}`);
+            const invitations = await response.json();
+            if (!response.ok) throw new Error(invitations.detail || 'Could not load invitations.');
+            document.querySelectorAll('.notification-badge').forEach(badge => {
+                badge.textContent = invitations.length;
+                badge.hidden = invitations.length === 0;
+            });
+            if (!list) return;
+            if (!invitations.length) {
+                list.innerHTML = '<div class="team-invitation-empty"><i class="ph ph-bell-slash" style="font-size:2rem;"></i><p>No pending team invitations.</p></div>';
+                return;
+            }
+            list.innerHTML = invitations.map(invitation => `
+                <div class="team-invitation-item" data-invitation-id="${invitation.id}">
+                    <div class="team-invitation-icon"><i class="ph ph-users-three"></i></div>
+                    <div class="team-invitation-copy">
+                        <strong>${escapeInviteHtml(invitation.team_name)}</strong>
+                        <span>Invited by ${escapeInviteHtml(invitation.inviter_roll_no)} · Code ${escapeInviteHtml(invitation.team_code)}</span>
+                    </div>
+                    <div class="team-invitation-actions">
+                        <button class="btn btn-secondary btn-sm" type="button" data-invite-action="decline">Decline</button>
+                        <button class="btn btn-primary btn-sm" type="button" data-invite-action="accept">Accept</button>
+                    </div>
+                </div>`).join('');
+        } catch (error) {
+            if (list) list.innerHTML = `<div class="team-invitation-empty" style="color:var(--status-danger);">${escapeInviteHtml(error.message)}</div>`;
+        }
+    }
+
+    document.querySelectorAll('.notification-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            notificationsModal.classList.add('active');
+            loadTeamInvitations();
+        });
+    });
+    document.getElementById('team-notifications-close').addEventListener('click', () => notificationsModal.classList.remove('active'));
+    document.getElementById('team-invite-close').addEventListener('click', closeInviteModal);
+    document.getElementById('team-invite-cancel').addEventListener('click', closeInviteModal);
+    inviteModal.addEventListener('click', event => { if (event.target === inviteModal) closeInviteModal(); });
+    notificationsModal.addEventListener('click', event => { if (event.target === notificationsModal) notificationsModal.classList.remove('active'); });
+
+    document.getElementById('roster-members').addEventListener('click', event => {
+        if (!event.target.closest('[data-invite-slot]')) return;
+        inviteModal.classList.add('active');
+        setTimeout(() => document.getElementById('team-invite-roll').focus(), 100);
+    });
+
+    inviteForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const submit = document.getElementById('team-invite-submit');
+        const invitee = document.getElementById('team-invite-roll').value.trim();
+        submit.disabled = true;
+        inviteFeedback.textContent = '';
+        try {
+            const response = await fetch('http://127.0.0.1:8000/team-invitations', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inviter_roll_no: activeUser, invitee_roll_no: invitee })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not send invitation.');
+            inviteFeedback.style.color = 'var(--status-verified)';
+            inviteFeedback.textContent = result.message;
+            document.getElementById('team-invite-roll').value = '';
+        } catch (error) {
+            inviteFeedback.style.color = '';
+            inviteFeedback.textContent = error.message;
+        } finally {
+            submit.disabled = false;
+        }
+    });
+
+    document.getElementById('team-invitations-list').addEventListener('click', async event => {
+        const button = event.target.closest('[data-invite-action]');
+        if (!button) return;
+        const item = button.closest('[data-invitation-id]');
+        item.querySelectorAll('button').forEach(actionButton => { actionButton.disabled = true; });
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/team-invitations/${item.dataset.invitationId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roll_no: activeUser, action: button.dataset.inviteAction })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not respond to invitation.');
+            if (result.status === 'accepted') {
+                renderTeamUI(result.team_name, result.team_code, result.members, activeUser);
+                notificationsModal.classList.remove('active');
+            }
+            await loadTeamInvitations();
+        } catch (error) {
+            alert(error.message);
+            item.querySelectorAll('button').forEach(actionButton => { actionButton.disabled = false; });
+        }
+    });
+
     async function fetchStudentTeam(rollNo) {
         try {
             const response = await fetch(`http://127.0.0.1:8000/get-student-team?roll_no=${encodeURIComponent(rollNo)}`);
@@ -146,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Append empty slots to maintain visual structure (up to 4)
             for (let i = members.length; i < 4; i++) {
                 rosterMembers.innerHTML += `
-                    <div class="member-slot empty">
+                    <div class="member-slot empty" data-invite-slot="true" title="Invite a student">
                         <div class="member-avatar empty-avatar"><i class="ph ph-plus"></i></div>
                         <span class="member-label">Invite</span>
                     </div>

@@ -1,5 +1,5 @@
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -50,6 +50,22 @@ class MentorStudent(Base):
     year: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class MentorReview(Base):
+    __tablename__ = "mentor_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    mentor_name: Mapped[str] = mapped_column(String, nullable=False)
+    mentor_key: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    group_name: Mapped[str] = mapped_column(String, nullable=False)
+    review_type: Mapped[str] = mapped_column(String, nullable=False)
+    review_date: Mapped[str] = mapped_column(String, nullable=False)
+    review_time: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="scheduled")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class Team(Base):
     __tablename__ = "teams"
 
@@ -70,3 +86,15 @@ class TeamMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     team_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     roll_no: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class TeamInvitation(Base):
+    __tablename__ = "team_invitations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    team_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    inviter_roll_no: Mapped[str] = mapped_column(String, nullable=False)
+    invitee_roll_no: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String, index=True, nullable=False, default="pending")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    responded_at: Mapped[str | None] = mapped_column(String, nullable=True)

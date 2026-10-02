@@ -1420,6 +1420,86 @@ input[type="password"]:focus {
     font-size: 1rem;
 }
 
+.axiom-project-modal {
+    max-width: 780px;
+    height: min(720px, 88vh);
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-project-context {
+    margin: 5px 0 0;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+.axiom-chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.4rem 1.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: rgba(248, 250, 252, 0.72);
+}
+
+.axiom-chat-message {
+    max-width: 82%;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    font-size: 0.92rem;
+}
+
+.axiom-chat-message.user {
+    align-self: flex-end;
+    color: white;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-bottom-right-radius: 4px;
+}
+
+.axiom-chat-message.assistant {
+    align-self: flex-start;
+    color: var(--text-main);
+    background: white;
+    border: 1px solid rgba(99, 102, 241, 0.13);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    border-bottom-left-radius: 4px;
+}
+
+.axiom-chat-message.streaming::after {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 1em;
+    margin-left: 4px;
+    vertical-align: -2px;
+    background: var(--primary);
+    animation: axiom-cursor 0.8s steps(2) infinite;
+}
+
+@keyframes axiom-cursor { 50% { opacity: 0; } }
+
+.axiom-chat-form {
+    display: flex;
+    gap: 10px;
+    padding: 1rem 1.4rem;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: white;
+}
+
+.axiom-chat-form .modal-input { flex: 1; }
+.axiom-chat-form .btn { flex-shrink: 0; }
+.axiom-chat-error {
+    min-height: 20px;
+    margin: 0;
+    padding: 0 1.4rem 0.7rem;
+    color: var(--status-danger);
+    background: white;
+    font-size: 0.82rem;
+}
+
 /* ============================================
    STUDENT UPLOAD CARD - Import Students
    ============================================ */
