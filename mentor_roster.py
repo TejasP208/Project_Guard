@@ -1,10 +1,10 @@
 """Read student assignments from an Excel workbook."""
 
-from io import BytesIO
 import re
+from io import BytesIO
+from typing import TypedDict, cast
 
 from openpyxl import load_workbook
-
 
 HEADER_ALIASES = {
     "student_name": {"studentname", "nameofstudent", "nameofthestudent", "studentfullname", "fullname", "name"},
@@ -16,7 +16,17 @@ HEADER_ALIASES = {
 }
 
 
-def _text(value):
+class MentorRosterRow(TypedDict):
+    student_name: str
+    mentor_name: str
+    mentor_key: str
+    prn: str
+    group_name: str
+    project_name: str
+    year: str
+
+
+def _text(value: object | None) -> str:
     if value is None:
         return ""
     if isinstance(value, float) and value.is_integer():
@@ -24,11 +34,11 @@ def _text(value):
     return " ".join(str(value).split())
 
 
-def _header(value):
+def _header(value: object | None) -> str:
     return re.sub(r"[^a-z0-9]", "", _text(value).lower())
 
 
-def mentor_key(name):
+def mentor_key(name: str) -> str:
     name = _text(name).casefold()
     title = r"^(?:professor|prof|dr|mrs|mr|ms)(?:\.\s*|\s+)"
     while re.match(title, name):
@@ -36,14 +46,15 @@ def mentor_key(name):
     return " ".join(name.split())
 
 
-def parse_mentor_roster(content: bytes, uploading_mentor: str):
+def parse_mentor_roster(content: bytes, uploading_mentor: str) -> list[MentorRosterRow]:
     """Return rows from the first sheet with a Student Name header."""
     workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
     try:
         for sheet in workbook.worksheets:
             rows = sheet.iter_rows(values_only=True)
-            columns = None
-            for row in rows:
+            columns: dict[str, int | None] | None = None
+            for raw_row in rows:
+                row = cast(tuple[object, ...], raw_row)
                 columns = {
                     field: next((index for index, cell in enumerate(row) if _header(cell) in aliases), None)
                     for field, aliases in HEADER_ALIASES.items()
@@ -53,16 +64,19 @@ def parse_mentor_roster(content: bytes, uploading_mentor: str):
             if not columns or columns["student_name"] is None:
                 continue
 
-            def value(row, field):
+            def value(
+                row: tuple[object, ...], field: str, *, columns: dict[str, int | None] = columns
+            ) -> str:
                 index = columns[field]
                 return _text(row[index]) if index is not None and index < len(row) else ""
 
-            students = []
+            students: list[MentorRosterRow] = []
             last_named_column = max(index for index in columns.values() if index is not None)
             current_group = ""
             current_mentor = uploading_mentor
             current_project = ""
-            for row in rows:
+            for raw_row in rows:
+                row = cast(tuple[object, ...], raw_row)
                 student_name = value(row, "student_name")
                 group = value(row, "group_name")
                 if group:
@@ -75,7 +89,16 @@ def parse_mentor_roster(content: bytes, uploading_mentor: str):
                 if not assigned_mentor:
                     continue
 
-                def add_student(name, prn):
+                def add_student(
+                    name: str,
+                    prn: str,
+                    *,
+                    row: tuple[object, ...] = row,
+                    students: list[MentorRosterRow] = students,
+                    assigned_mentor: str = assigned_mentor,
+                    current_group: str = current_group,
+                    current_project: str = current_project,
+                ) -> None:
                     students.append({
                         "student_name": name,
                         "mentor_name": assigned_mentor,

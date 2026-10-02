@@ -402,6 +402,13 @@ textarea:focus {
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.upload-error {
+    margin: 0.75rem 0 0;
+    color: var(--status-danger, #b42318);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
 .file-info-bar {
     display: flex;
     justify-content: space-between;

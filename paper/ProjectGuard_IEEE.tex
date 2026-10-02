@@ -1,0 +1,103 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{url}
+
+\title{ProjectGuard: A Web Platform for Academic Project Management and Hybrid Similarity Screening}
+
+\author{\IEEEauthorblockN{Author Name(s)}
+\IEEEauthorblockA{Department and Institution\\
+City, Country\\
+email@example.com}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Academic project repositories help students and mentors track submissions, but searching earlier work and identifying potentially overlapping proposals remain difficult when titles and descriptions use different wording. ProjectGuard is a prototype web platform that combines student teams, mentor rosters, project records, an academic assistant, and a hybrid similarity screen. The screen extracts text from PDF, DOCX, or TXT submissions, compares the combined submission text with stored project abstracts using term frequency--inverse document frequency (TF--IDF), and compares the submission summary and overlapping document chunks with stored project embeddings. The prototype combines the lexical and semantic scores with fixed weights of 0.60 and 0.40, respectively, and returns the three closest records with component scores. PostgreSQL and pgvector store the project records and 1024-dimensional embeddings; FastAPI exposes the application interface. This paper documents the implemented design and defines an evaluation protocol. The repository does not yet contain labeled submissions sufficient to establish detection accuracy or calibrate its decision threshold, so no empirical accuracy claim is made.
+\end{abstract}
+
+\begin{IEEEkeywords}
+academic project management, document similarity, TF--IDF, text embeddings, plagiarism screening, pgvector
+\end{IEEEkeywords}
+
+\section{Introduction}
+Academic departments accumulate project titles and abstracts over successive years. A new proposal may overlap an earlier one even when its wording differs, while shared technical terms may make unrelated proposals appear similar. A useful screening tool therefore needs to show candidate matches and the evidence behind its score, leaving the originality judgment to a person. The term ``plagiarism'' is used in the prototype interface, but textual or semantic similarity alone cannot establish misconduct.
+
+ProjectGuard brings proposal screening into the same workflow as team formation, submission, and mentor review. Students create accounts, join teams by code, submit a project title and abstract, and upload a document for a similarity check. Mentors can manage a student roster and inspect project records. A separate streaming assistant answers academic project questions. This paper contributes an implementation account of the integrated platform, a precise account of its current similarity calculation, and a reproducible plan for evaluating and calibrating the screen. It does not claim that the prototype outperforms existing methods.
+
+\section{Related Work}
+TF--IDF is a standard lexical representation for information retrieval: terms are weighted by their frequency within a document and their rarity across the corpus \cite{salton1988}. Cosine comparison of TF--IDF vectors is useful for direct wording overlap, but it can miss related descriptions that use different terms. Dense text embeddings address this limitation by mapping text to vectors in which semantically related passages can be compared by cosine similarity. Sentence-BERT established a widely used approach to sentence embedding and cosine based semantic comparison \cite{reimers2019}; ProjectGuard's current PostgreSQL path instead calls the Qwen3 embedding model through Cloudflare Workers AI \cite{qwen3embedding,cloudflareqwen}.
+
+The two signals are complementary, although their numeric outputs are not inherently calibrated probabilities. ProjectGuard therefore reports them as similarity indicators. Its weighted aggregate and cutoff are implementation choices that require labeled project submissions before they can support operational decisions.
+
+\section{System Architecture}
+ProjectGuard uses static HTML, CSS, and JavaScript pages for the student and mentor interfaces. A FastAPI service supplies account, team, project, mentor roster, chat, and similarity endpoints. SQLAlchemy maps students, mentors, teams, team memberships, mentor roster entries, and projects to PostgreSQL tables. The projects table stores a title, abstract, group and year metadata, team name, and a nullable 1024-dimensional vector. pgvector provides cosine distance over these vectors \cite{pgvector}.
+
+\begin{table}[t]
+\caption{Implemented ProjectGuard Components}
+\label{tab:components}
+\centering
+\footnotesize
+\begin{tabular}{p{0.23\columnwidth}p{0.67\columnwidth}}
+\hline
+Component & Implemented role \\
+\hline
+Student portal & Account access, team creation and joining, project submission, and similarity display. \\
+Mentor portal & Account access, Excel roster import, and student and project views. \\
+API service & FastAPI endpoints for application operations and document checking. \\
+Data store & PostgreSQL project records and pgvector embeddings. \\
+Similarity screen & PDF/DOCX/TXT extraction, TF--IDF comparison, Qwen embedding comparison, and ranked matches. \\
+Assistant & Streaming responses from a configured Groq chat model. \\
+\hline
+\end{tabular}
+\end{table}
+
+The active application configuration requires PostgreSQL. New project titles and abstracts are embedded before insertion. An indexing utility can fill missing embeddings for older records. The check endpoint reads an uploaded document and returns a result; the project submission endpoint stores the title and abstract, rather than the uploaded document itself. Thus the database representation and the query representation differ: each stored project has one summary vector, while a checked document may contribute many query vectors.
+
+\section{Similarity Screening Method}
+\subsection{Text Extraction and Preprocessing}
+The screen accepts a title, description, and uploaded file. PyMuPDF extracts text from PDF pages, python-docx reads nonempty DOCX paragraphs, and TXT files are decoded as UTF-8. The title, description, and extracted text are concatenated for the lexical comparison. Preprocessing lowercases the text, retains English letters and spaces, removes English stopwords, and lemmatizes the remaining tokens. Consequently, formulas, numbers, and non-English text are not represented faithfully in the present lexical path.
+
+\subsection{Lexical Similarity}
+The cleaned submission and all stored project abstracts are fitted together with a TF--IDF vectorizer using unigrams and bigrams, sublinear term frequencies, and cosine similarity. If $x$ is the submission vector and $a_j$ is the vector of stored abstract $j$, the lexical score is
+\begin{equation}
+L_j = \frac{x\cdot a_j}{\lVert x\rVert_2\lVert a_j\rVert_2}.
+\end{equation}
+The vocabulary and inverse document frequencies are recomputed for each check. The stored title is not included in this TF--IDF comparison.
+
+\subsection{Semantic Similarity}
+Each stored project is embedded from its title and abstract using the Cloudflare hosted \texttt{@cf/qwen/qwen3-embedding-0.6b} model \cite{cloudflareqwen}. The query title and description form one semantic input. Extracted document text is divided into chunks of at most 3000 characters with approximately 200 characters of overlap. The code permits at most 32 chunks for each call to the chunking function and rejects longer input; the summary is chunked separately. For project $j$ and query chunks $q_1,\ldots,q_m$, the semantic score is the strongest cosine match:
+\begin{equation}
+S_j = \max_{1\leq k\leq m}\!\left[\operatorname{clip}_{[0,1]}\left(\frac{e(q_k)\cdot e(p_j)}{\lVert e(q_k)\rVert_2\lVert e(p_j)\rVert_2}\right)\right],
+\end{equation}
+where $e(\cdot)$ denotes the embedding service and $p_j$ is the stored title--abstract text. The maximum helps find a relevant passage within a longer document, but it can also raise scores as the number of chunks grows. This effect needs measurement during evaluation.
+
+\subsection{Ranking and Interface Decision}
+For each stored project, the prototype calculates
+\begin{equation}
+H_j = 0.60L_j + 0.40S_j,\qquad H=100\max_j H_j.
+\end{equation}
+It returns the highest scoring project, its year and group, the top three matches, and the component scores. The interface labels scores below 25 as low risk, scores from 25 to below 55 as medium risk, and scores of 55 or more as high risk. Its submission button is enabled only when $H\leq30$. These labels and the 30\% cutoff are provisional. The cutoff currently resides in client-side JavaScript; the server's project submission endpoint does not independently apply it. Accordingly, it must not be presented as a validated or tamper resistant academic policy.
+
+\section{Evaluation Protocol and Current Evidence}
+The repository includes a CSV schema and a calibration script for examples labeled \texttt{similar} or \texttt{unrelated}, but its supplied CSV has only a header. No labeled benchmark, train/test split, confusion matrix, or timing study is available. A small documented manual embedding comparison produced cosine values of 0.8246 for one related pair and 0.4234 for one unrelated pair. Those two illustrative values neither evaluate the combined checker nor establish a decision threshold.
+
+For a proper study, collect proposals from multiple project years and fields, remove identifying student information, and have at least two knowledgeable reviewers label each query--reference pair. Record disagreement and adjudication rules. Keep near duplicates, paraphrased overlaps, and unrelated proposals with shared technical vocabulary. Split examples by project or academic year to avoid placing variants of the same project in both development and evaluation sets. On the development set, compare TF--IDF alone, embeddings alone, and the hybrid score; select weights and a cutoff there. On a held out set, report precision, recall, specificity, F1, balanced accuracy, precision--recall curves, and confidence intervals, together with subgroup results by document length and topic. Review false positives and false negatives with mentors. Measure embedding API failures and end to end latency separately. Such a study would establish whether the screen is useful for triage and whether the interface cutoff is justified.
+
+\section{Limitations and Future Work}
+The current result is a similarity ranking, not proof of copying. It compares stored titles and abstracts with richer uploaded documents, which may miss shared details absent from an abstract and may overemphasize broad topic similarity. The lexical preprocessing discards digits and non-English characters. The maximum over chunks can favor longer queries. The system also depends on external embedding and chat services. Its mentor and student portals provide workflow features, but the browser-held login state and client-side cutoff are insufficient for a production authorization policy. Future work should add server-enforced authentication and submission rules, representative labeled evaluation, threshold calibration, and human review of flagged submissions.
+
+\section{Conclusion}
+ProjectGuard integrates academic project records, student and mentor workflows, and a hybrid lexical and semantic similarity screen. The implemented checker can rank prior projects and expose the components of its score. Its usefulness for identifying meaningful overlap remains an empirical question: representative labels, held out evaluation, and calibrated policy thresholds are required before deployment as a decision aid.
+
+\begin{thebibliography}{00}
+\bibitem{salton1988} G. Salton and C. Buckley, ``Term-weighting approaches in automatic text retrieval,'' \emph{Information Processing \& Management}, vol. 24, no. 5, pp. 513--523, 1988. [Online]. Available: \url{https://ecommons.cornell.edu/entities/publication/d81a71f9-8de9-4ef1-9ee2-8544cdb48372}
+\bibitem{reimers2019} N. Reimers and I. Gurevych, ``Sentence-BERT: Sentence embeddings using Siamese BERT-networks,'' in \emph{Proc. EMNLP-IJCNLP}, 2019, pp. 3982--3992. [Online]. Available: \url{https://aclanthology.org/D19-1410/}
+\bibitem{qwen3embedding} Y. Zhang \emph{et al.}, ``Qwen3 Embedding: Advancing text embedding and reranking through foundation models,'' 2025. [Online]. Available: \url{https://arxiv.org/abs/2506.05176}
+\bibitem{cloudflareqwen} Cloudflare, ``qwen3-embedding-0.6b (Qwen),'' \emph{Workers AI Documentation}. [Online]. Available: \url{https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/}. Accessed: Sep. 30, 2026.
+\bibitem{pgvector} pgvector contributors, ``pgvector: Open-source vector similarity search for Postgres.'' [Online]. Available: \url{https://github.com/pgvector/pgvector}. Accessed: Sep. 30, 2026.
+\end{thebibliography}
+
+\end{document}

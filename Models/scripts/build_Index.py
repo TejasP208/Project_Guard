@@ -1,16 +1,17 @@
-import sqlite3
 import numpy as np
 import json
 import os
 from sentence_transformers import SentenceTransformer
+from sqlalchemy import select
+
+from database import SessionLocal
+from models import Project
 
 # ── Paths ────────────────────────────────────────────────────────
 # ── Paths ────────────────────────────────────────────────────────
 base_dir = os.path.dirname(os.path.dirname(__file__))       # Models/
-project_root = os.path.dirname(base_dir)                    # Mini_Project/
 data_dir = os.path.join(base_dir, 'data')
 
-db_path = os.path.join(project_root, 'DB', 'training_data.db')
 vectors_path = os.path.join(data_dir, 'db_vectors.npy')
 ids_path = os.path.join(data_dir, 'db_ids.npy')
 metadata_path = os.path.join(data_dir, 'db_metadata.json')
@@ -22,17 +23,14 @@ print("Downloading/Loading Sentence Transformer...")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 print("Model loaded ✓")
 
-# ── Load database ────────────────────────────────────────────────
-print("DB path being used:", db_path)
-conn = sqlite3.connect(db_path)
-cursor = conn.cursor()
-cursor.execute("SELECT id, project_name, project_abstract FROM projects")
-rows = cursor.fetchall()
-conn.close()
+# ── Load projects from PostgreSQL ─────────────────────────────────
+with SessionLocal() as session:
+    rows = session.scalars(select(Project).order_by(Project.id)).all()
 
 embeddings = {}
 metadata   = {}
-for id, name, abstract in rows:
+for project in rows:
+    id, name, abstract = project.id, project.project_name, project.project_abstract
     # Combine name and abstract into one clean string
     text = f"{name}. {abstract if abstract else ''}"
     
