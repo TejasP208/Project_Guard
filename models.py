@@ -11,14 +11,14 @@ class Base(DeclarativeBase):
 class GroupMessage(Base):
     __tablename__ = "group_messages"
 
-    id = Column(Integer, primary_key=True)
-    room_id = Column(String, index=True, nullable=False)
-    sender_role = Column(String, nullable=False)
-    sender_user = Column(String, nullable=False)
-    sender_name = Column(String, nullable=False)
-    text = Column(Text, nullable=False, default="")
-    meet_link = Column(String, nullable=True)
-    created_at = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    sender_role: Mapped[str] = mapped_column(String, nullable=False)
+    sender_user: Mapped[str] = mapped_column(String, nullable=False)
+    sender_name: Mapped[str] = mapped_column(String, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    meet_link: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
 
 class Student(Base):
     __tablename__ = "students"
