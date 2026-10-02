@@ -7,6 +7,19 @@ class Base(DeclarativeBase):
     pass
 
 
+
+class GroupMessage(Base):
+    __tablename__ = "group_messages"
+
+    id = Column(Integer, primary_key=True)
+    room_id = Column(String, index=True, nullable=False)
+    sender_role = Column(String, nullable=False)
+    sender_user = Column(String, nullable=False)
+    sender_name = Column(String, nullable=False)
+    text = Column(Text, nullable=False, default="")
+    meet_link = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+
 class Student(Base):
     __tablename__ = "students"
 

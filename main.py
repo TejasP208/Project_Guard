@@ -18,12 +18,20 @@ from database import SessionLocal, enable_pgvector, engine, migrate_database
 from mentor_roster import mentor_key, parse_mentor_roster
 from models import Base, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from nlp.checker import run_plagiarism_check
+<<<<<<< HEAD
+from group_connect import create_router
+=======
 from nlp.extractor import DocumentExtractionError, DocumentLimitError, DocumentValidationError
 from passwords import hash_password, verify_password
 from utils import generate_team_code
 from embeddings import CloudflareEmbeddingClient
+>>>>>>> origin/main
 
 
+<<<<<<< HEAD
+app = FastAPI()
+app.include_router(create_router(lambda: SessionLocal()))
+=======
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Create all runtime tables in PostgreSQL only after pgvector is enabled.
@@ -36,6 +44,7 @@ app = FastAPI(lifespan=lifespan)
 logger = logging.getLogger(__name__)
 
 MAX_PLAGIARISM_UPLOAD_BYTES = 20 * 1024 * 1024
+>>>>>>> origin/main
 
 # Middleware
 app.add_middleware(
