@@ -101,10 +101,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             try {
                 const clerk = await window.projectGuardClerkReady;
-                await clerk.signOut({ redirectUrl: 'auth.html' });
+                await clerk.signOut();
+                window.location.replace('auth.html');
             } catch (error) {
                 console.error('Clerk sign-out failed:', error);
-                alert('Could not sign out. Please try again.');
+                alert(`Could not sign out: ${error.message || 'Please try again.'}`);
             }
         });
     }
