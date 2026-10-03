@@ -10,6 +10,7 @@ python-dotenv
 openpyxl
 groq
 fastapi
+clerk-backend-api>=6.0.1,<7
 uvicorn
 pydantic
 starlette

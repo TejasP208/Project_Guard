@@ -1,6 +1,7 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    if (window.projectGuardSessionReady && !await window.projectGuardSessionReady) return;
     // --- Profile Display & Edit Logic --- //
-    const activeUser = localStorage.getItem('loggedInUser');
+    const activeUser = window.projectGuardProfile?.identifier;
     let customStudentName = localStorage.getItem('studentName') || activeUser || 'Student';
     let customStudentPic = localStorage.getItem('studentPic') || null;
 
@@ -96,12 +97,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
+        logoutBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            localStorage.removeItem('loggedInUser');
-            localStorage.removeItem('studentName');
-            localStorage.removeItem('studentPic');
-            window.location.href = 'auth.html';
+            try {
+                const clerk = await window.projectGuardClerkReady;
+                await clerk.signOut({ redirectUrl: 'auth.html' });
+            } catch (error) {
+                console.error('Clerk sign-out failed:', error);
+                alert('Could not sign out. Please try again.');
+            }
         });
     }
 
@@ -124,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeUser) return;
         const list = document.getElementById('team-invitations-list');
         try {
-            const response = await fetch(`http://127.0.0.1:8000/team-invitations?roll_no=${encodeURIComponent(activeUser)}`);
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations?roll_no=${encodeURIComponent(activeUser)}`);
             const invitations = await response.json();
             if (!response.ok) throw new Error(invitations.detail || 'Could not load invitations.');
             document.querySelectorAll('.notification-badge').forEach(badge => {
@@ -178,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         submit.disabled = true;
         inviteFeedback.textContent = '';
         try {
-            const response = await fetch('http://127.0.0.1:8000/team-invitations', {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ inviter_roll_no: activeUser, invitee_roll_no: invitee })
             });
@@ -201,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = button.closest('[data-invitation-id]');
         item.querySelectorAll('button').forEach(actionButton => { actionButton.disabled = true; });
         try {
-            const response = await fetch(`http://127.0.0.1:8000/team-invitations/${item.dataset.invitationId}`, {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations/${item.dataset.invitationId}`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ roll_no: activeUser, action: button.dataset.inviteAction })
             });
@@ -220,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchStudentTeam(rollNo) {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/get-student-team?roll_no=${encodeURIComponent(rollNo)}`);
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team?roll_no=${encodeURIComponent(rollNo)}`);
             const data = await response.json();
             if (response.ok && data.has_team) {
                 renderTeamUI(data.team_name, data.team_code, data.members, rollNo);
@@ -465,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentFile) formData.append("file", currentFile);
 
         try {
-            const response = await fetch("http://127.0.0.1:8000/check-plagiarism", {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/check-plagiarism`, {
                 method: "POST",
                 body: formData
             });
@@ -644,9 +648,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const maxMembers = document.getElementById('team-max')?.value || 4;
 
             try {
-                const rollNo = localStorage.getItem('loggedInUser');
+                const rollNo = window.projectGuardProfile?.identifier;
 
-                const response = await fetch('http://127.0.0.1:8000/create-team', {
+                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/create-team`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -684,11 +688,11 @@ document.addEventListener('DOMContentLoaded', () => {
         joinTeamFormEl.addEventListener('submit', async (e) => {
             e.preventDefault();
             const teamCode = document.getElementById('team-code').value;
-            const uiRoll = document.getElementById('join-roll') ? document.getElementById('join-roll').value : "";
-            const rollNo = localStorage.getItem('loggedInUser') || uiRoll;
+            const rollNo = window.projectGuardProfile?.identifier;
+            if (!rollNo) return;
 
             try {
-                const response = await fetch('http://127.0.0.1:8000/join-team', {
+                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/join-team`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -764,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         btnLeaveTeam.addEventListener('click', async () => {
-            const activeUser = localStorage.getItem('loggedInUser');
+            const activeUser = window.projectGuardProfile?.identifier;
             if (!activeUser) {
                 alert('Session expired. Please log in again.');
                 window.location.href = 'auth.html';
@@ -773,7 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!confirm('Are you sure you want to leave this team?')) return;
 
             try {
-                const res = await fetch('http://127.0.0.1:8000/leave-team', {
+                const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/leave-team`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ roll_no: activeUser })
@@ -867,7 +871,7 @@ async function sendMessage() {
     }
 
     try {
-        const res = await fetch(`http://127.0.0.1:8000/chat-stream?prompt=${encodeURIComponent(message)}`);
+        const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/chat-stream?prompt=${encodeURIComponent(message)}`);
 
         // If backend fails
         if (!res.ok) {
@@ -911,7 +915,7 @@ async function submitProject() {
     const titleEl = document.getElementById("project-title");
     const descEl = document.getElementById("project-desc");
 
-    const rollNo = localStorage.getItem("loggedInUser"); // saved during login
+    const rollNo = window.projectGuardProfile?.identifier;
 
     if (!rollNo) {
         alert("Session expired. Please log in again.");
@@ -935,7 +939,7 @@ async function submitProject() {
     btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Submitting...';
 
     try {
-        const res = await fetch("http://127.0.0.1:8000/submit-project", {
+        const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/submit-project`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)

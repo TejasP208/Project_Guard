@@ -25,7 +25,23 @@ SessionLocal = sessionmaker(bind=engine)
 
 
 def migrate_database():
-    """Apply safe additive project, mentor-roster, and vector migrations."""
+    """Apply safe additive application-profile and vector migrations."""
+    inspector = inspect(engine)
+    for table_name in ("students", "mentors"):
+        if not inspector.has_table(table_name):
+            continue
+        columns = {column["name"] for column in inspector.get_columns(table_name)}
+        if "clerk_user_id" not in columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE {table_name} ADD COLUMN clerk_user_id VARCHAR"
+                )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table_name}_clerk_user_id "
+                f"ON {table_name} (clerk_user_id)"
+            )
+
     if inspect(engine).has_table("mentor_students"):
         roster_columns = {column["name"] for column in inspect(engine).get_columns("mentor_students")}
         if "project_name" not in roster_columns:

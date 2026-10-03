@@ -4,16 +4,17 @@ This document tracks the project changes to complete before making Project Guard
 
 ## Frontend hosting
 
-**Current state:** Static files are in `Frontend/` and call `localhost:8000` directly.
+**Current state:** Static files are in `Frontend/` and route API requests through `Frontend/deployment-config.js`. It uses localhost for local development and requires an explicit HTTPS API origin on deployed domains.
 
 **Planned changes:**
 - [ ] Deploy `Frontend/` to Cloudflare Pages.
-- [ ] Put the Render API base URL in one frontend configuration value and replace hard-coded localhost URLs.
+- [x] Route frontend API requests through one configurable API base URL.
+- [ ] Set `Frontend/deployment-config.js` to the deployed Render API origin before publishing.
 - [ ] Configure backend CORS to allow the deployed Cloudflare Pages domain.
 
 ## Backend hosting
 
-**Current state:** FastAPI is started locally for development.
+**Current state:** FastAPI is started locally for development. Production startup now requires live Clerk keys and exact HTTPS CORS/authorized-party origins.
 
 **Planned changes:**
 - [ ] Deploy the API as a Render Web Service.
@@ -76,13 +77,21 @@ This document tracks the project changes to complete before making Project Guard
 
 ## Authentication
 
-**Current state:** Successful login is remembered in browser `localStorage`; API routes do not verify it.
+**Current state:** Clerk sessions are verified by FastAPI, linked PostgreSQL profiles supply student/mentor identity, and API routes require a valid session. Browser `localStorage` holds display preferences only.
 
 **Planned changes:**
-- [ ] Complete the Clerk authentication plan in `clerk-authentication-plan.md` before exposing the service publicly.
-- [ ] Add server-side authentication and student/mentor role checks to protected endpoints.
-- [ ] Require authentication for routes that expose application data.
-- [ ] Do not treat browser-only login state as authorization.
+- [x] Complete the Clerk authentication plan in `clerk-authentication-plan.md` before exposing the service publicly.
+- [x] Add server-side authentication and student/mentor role checks to protected endpoints.
+- [x] Require authentication for routes that expose application data.
+- [x] Do not treat browser-only login state as authorization.
+
+**Clerk production settings:**
+- [ ] Create/select the Clerk production instance and use its `pk_live_` publishable key and `sk_live_` secret key.
+- [ ] Set Render environment variables: `APP_ENV=production`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_AUTHORIZED_PARTIES`, and `CORS_ALLOWED_ORIGINS`.
+- [ ] Set both origin allowlists to the exact Cloudflare Pages production origin(s), including any custom frontend domain; use HTTPS origins without paths or wildcards.
+- [ ] Set `Frontend/deployment-config.js` to the Render API's HTTPS origin before publishing the static frontend.
+- [ ] In the Clerk production instance, configure the deployed frontend domain and its sign-in/sign-up redirect URLs. Keep the Clerk secret key only in Render's private environment settings.
+- [ ] Verify HTTPS sign-in/sign-out and protected API behavior after both services are deployed.
 
 ## Deployment readiness
 

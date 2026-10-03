@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
@@ -71,17 +71,27 @@ def assigned_rooms(db, role, user):
     return sorted(groups.values(), key=lambda group: group["name"].casefold()), account, name
 
 
+def verified_identity(request: Request) -> tuple[str, str]:
+    """Read the role and identifier resolved by the FastAPI Clerk middleware."""
+    profile = getattr(request.state, "profile", None)
+    if not profile:
+        raise HTTPException(401, "A linked Clerk profile is required.")
+    return profile["role"], profile["identifier"]
+
+
 def create_router(session_factory):
     router = APIRouter(prefix="/group-connect")
 
     @router.get("/groups")
-    def get_groups(role: Literal["mentor", "student"], user: str):
+    def get_groups(request: Request, role: Literal["mentor", "student"] | None = None, user: str | None = None):
+        role, user = verified_identity(request)
         with session_factory() as db:
             groups, _, _ = assigned_rooms(db, role, user)
             return groups
 
     @router.get("/messages")
-    def get_messages(role: Literal["mentor", "student"], user: str, group_id: str):
+    def get_messages(request: Request, group_id: str, role: Literal["mentor", "student"] | None = None, user: str | None = None):
+        role, user = verified_identity(request)
         with session_factory() as db:
             groups, _, _ = assigned_rooms(db, role, user)
             if not any(group["id"] == group_id for group in groups):
@@ -92,19 +102,20 @@ def create_router(session_factory):
             return [message_payload(message) for message in reversed(messages)]
 
     @router.post("/messages", status_code=201)
-    def send_message(data: MessageRequest):
+    def send_message(data: MessageRequest, request: Request):
+        role, user = verified_identity(request)
         text, link = data.text.strip(), data.meet_link.strip()
         if not text and not link:
             raise HTTPException(400, "Enter a message or share a meeting link.")
         if link and not re.fullmatch(r"https://meet\.google\.com/[a-z]{3}-[a-z]{4}-[a-z]{3}", link):
             raise HTTPException(400, "Paste a valid Google Meet link, such as https://meet.google.com/abc-defg-hij.")
         with session_factory() as db:
-            groups, account, name = assigned_rooms(db, data.role, data.user)
+            groups, account, name = assigned_rooms(db, role, user)
             if not any(group["id"] == data.group_id for group in groups):
                 raise HTTPException(403, "You are not assigned to this group.")
             message = GroupMessage(
-                room_id=data.group_id, sender_role=data.role,
-                sender_user=account.username if data.role == "mentor" else account.roll_no,
+                room_id=data.group_id, sender_role=role,
+                sender_user=account.username if role == "mentor" else account.roll_no,
                 sender_name=name, text=text, meet_link=link or None,
                 created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             )

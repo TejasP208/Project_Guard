@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fetch from database
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/projects');
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
             if (response.ok) {
                 allProjects = await response.json();
             } else {

@@ -1,10 +1,13 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    if (window.projectGuardSessionReady && !await window.projectGuardSessionReady) return;
     const view = document.getElementById('view-group-connect');
     if (!view) return;
-    const role = view.dataset.role;
-    const user = localStorage.getItem(role === 'mentor' ? 'mentorUser' : 'loggedInUser');
-    if (!user) return;
-    const api = 'http://127.0.0.1:8000/group-connect';
+    const profile = window.projectGuardProfile;
+    if (!profile) return;
+    const role = profile.role;
+    const user = profile.identifier;
+    if (role !== view.dataset.role || !user) return;
+    const api = `${window.projectGuardApiBaseUrl}/group-connect`;
     const list = document.getElementById('group-selector-list');
     const stream = document.getElementById('group-chat-stream');
     const input = document.getElementById('group-chat-input');
@@ -23,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const controls = [...view.querySelectorAll('#group-chat-form input, #group-chat-form button, .chat-room-actions button')];
 
     async function request(path, options) {
-        const response = await fetch(`${api}${path}`, options);
+        const response = await window.projectGuardApiFetch(`${api}${path}`, options);
         const result = await response.json();
         if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not connect to the group.');
         return result;

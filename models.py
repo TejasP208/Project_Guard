@@ -24,8 +24,9 @@ class Student(Base):
     __tablename__ = "students"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    clerk_user_id: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     roll_no: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
-    password: Mapped[str] = mapped_column(String, nullable=True)
+    password: Mapped[str | None] = mapped_column(String, nullable=True)
     year: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
@@ -46,8 +47,9 @@ class Mentor(Base):
     __tablename__ = "mentors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    clerk_user_id: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     username: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=True)
-    password: Mapped[str] = mapped_column(String, nullable=True)
+    password: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class MentorStudent(Base):

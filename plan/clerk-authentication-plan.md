@@ -18,29 +18,33 @@ Every API route that returns or changes application data must require authentica
    - Use the same Clerk application for students and mentors.
    - Preserve the separate student and mentor portal interfaces.
 
-- [ ] **Link Clerk identities to PostgreSQL records**
+- [x] **Link Clerk identities to PostgreSQL records**
    - Add a stable Clerk user ID to student and mentor records.
    - Keep application profile fields—such as roll number, year, and mentor name—in PostgreSQL.
 
-- [ ] **Manually link existing test accounts**
+- [x] **Manually link existing test accounts**
    - Manually associate each existing test account with its matching Clerk user.
    - Keep the current test data during development; do not migrate or recreate it as part of authentication setup.
 
-- [ ] **Verify Clerk sessions in FastAPI**
+- [x] **Verify Clerk sessions in FastAPI**
    - Require a valid Clerk session token on protected API requests.
    - Verify its signature and claims on the backend.
    - Resolve the authenticated user from the verified Clerk user ID and the linked application record.
+   - Provide an authenticated `/api/me` endpoint and require a successful server-side profile and portal-role check before dashboards are shown.
 
-- [ ] **Protect the API**
+- [x] **Protect the API**
    - Require authentication for all routes that return or change application data, including student, mentor, team, project, and roster routes.
    - Review utility endpoints and explicitly decide whether each requires sign-in.
    - Do not trust caller-supplied roll numbers, mentor usernames, or roles to establish identity or grant access.
+   - FastAPI requires a verified Clerk session and linked PostgreSQL profile by default. `/api/config` and API documentation remain public; legacy password signup/login routes return `410 Gone`.
+   - Chat and plagiarism utilities require any linked signed-in profile. Mentor Axiom, project, student roster, dashboard, review, and import routes require a mentor profile. Team, invitation, and student-project operations require a student profile.
 
-- [ ] **Update frontend session handling**
+- [x] **Update frontend session handling**
    - Replace `localStorage`-based login checks with Clerk session state.
    - Send the Clerk session token with API requests.
    - Sign out through Clerk.
    - Keep browser-stored profile preferences only when they are used for display, not authorization.
+   - Student and mentor identity now comes from the server-verified Clerk profile; only display name and avatar preferences remain in localStorage.
 
 - [ ] **Configure and verify deployment**
    - Configure production Clerk keys and allowed URLs in the deployment environment.

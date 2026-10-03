@@ -13,8 +13,11 @@
     <link rel="stylesheet" href="mentor_sytle.css">
     <link rel="stylesheet" href="group_connect.css">
     <script src="group_connect.js" defer></script>
+    <script src="deployment-config.js"></script>
+    <script src="clerk-config.js"></script>
+    <script src="portal-session-guard.js"></script>
 </head>
-<body>
+<body data-portal="mentor">
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar glass-panel">
@@ -463,13 +466,13 @@
     </div>
 
     <script>
+        (async () => {
+        if (!await window.projectGuardSessionReady) return;
         // ============================================
-        // Auth Guard & Mentor Name
+        // Mentor display identity
         // ============================================
-        const mentorUser = localStorage.getItem('mentorUser');
-        if (!mentorUser) {
-            window.location.href = 'mentor_auth.html';
-        }
+        const mentorUser = window.projectGuardProfile?.identifier;
+        if (!mentorUser) return;
         // Profile display setup
         let customMentorName = localStorage.getItem('mentorName') || mentorUser;
         let customMentorPic = localStorage.getItem('mentorPic') || null;
@@ -555,12 +558,15 @@
         }
 
         // Logout
-        document.getElementById('logout-btn').addEventListener('click', (e) => {
+        document.getElementById('logout-btn').addEventListener('click', async (e) => {
             e.preventDefault();
-            localStorage.removeItem('mentorUser');
-            localStorage.removeItem('mentorName');
-            localStorage.removeItem('mentorPic');
-            window.location.href = 'mentor_auth.html';
+            try {
+                const clerk = await window.projectGuardClerkReady;
+                await clerk.signOut({ redirectUrl: 'mentor_auth.html' });
+            } catch (error) {
+                console.error('Clerk sign-out failed:', error);
+                alert('Could not sign out. Please try again.');
+            }
         });
 
         // ============================================
@@ -628,7 +634,7 @@
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading projects...</td></tr>';
 
                 try {
-                    const response = await fetch('http://localhost:8000/api/projects');
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
                     if (!response.ok) throw new Error('Failed to fetch');
                     const projects = await response.json();
                     projectCatalog = new Map(projects.map(project => [String(project.id), project]));
@@ -733,7 +739,7 @@
                     }
                 };
                 try {
-                    const response = await fetch('http://127.0.0.1:8000/mentor/axiom-stream', {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/axiom-stream`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         signal: axiomRequestController.signal,
@@ -786,7 +792,7 @@
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading students...</td></tr>';
 
                 try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
                     if (!response.ok) throw new Error('Failed to fetch');
                     const students = await response.json();
                     rosterStudents = students;
@@ -918,7 +924,7 @@
                 if (!confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`)) return;
                 button.disabled = true;
                 try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/students/${student.id}?mentor_user=${encodeURIComponent(mentorUser)}`, { method: 'DELETE' });
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/${student.id}?mentor_user=${encodeURIComponent(mentorUser)}`, { method: 'DELETE' });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.detail || 'Could not delete student.');
                     document.getElementById('student-list-feedback').textContent = `${student.student_name} was removed from your roster.`;
@@ -943,9 +949,9 @@
                 try {
                     const isCreate = rosterMode === 'create';
                     const url = isCreate
-                        ? 'http://127.0.0.1:8000/mentor/students'
-                        : `http://127.0.0.1:8000/mentor/students/${selectedRosterId}`;
-                    let response = await fetch(url, {
+                        ? `${window.projectGuardApiBaseUrl}/mentor/students`
+                        : `${window.projectGuardApiBaseUrl}/mentor/students/${selectedRosterId}`;
+                    let response = await window.projectGuardApiFetch(url, {
                         method: isCreate ? 'POST' : 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
@@ -960,7 +966,7 @@
                             `Move this student to ${mentorUser} (${newGroup}) and set the name to ${data.student_name}?`
                         );
                         if (!confirmed) return;
-                        response = await fetch(url, {
+                        response = await window.projectGuardApiFetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ ...data, transfer_existing: true })
@@ -1036,7 +1042,7 @@
             async function loadDashboard() {
                 const activity = document.getElementById('dashboard-activity');
                 try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/dashboard?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/dashboard?mentor_user=${encodeURIComponent(mentorUser)}`);
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.detail || 'Could not load dashboard.');
                     document.getElementById('dashboard-students').textContent = data.assigned_students;
@@ -1076,7 +1082,7 @@
                 const item = button.closest('[data-review-id]');
                 button.disabled = true;
                 try {
-                    const response = await fetch(`http://127.0.0.1:8000/mentor/reviews/${item.dataset.reviewId}`, {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/reviews/${item.dataset.reviewId}`, {
                         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ mentor_user: mentorUser, status: button.dataset.reviewAction })
                     });
@@ -1098,7 +1104,7 @@
                 btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i> Scheduling...';
                 btn.disabled = true;
                 try {
-                    const response = await fetch('http://127.0.0.1:8000/mentor/reviews', {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/reviews`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             mentor_user: mentorUser,
@@ -1229,7 +1235,7 @@
                     addStudentsBtn.disabled = true;
                     setImportStatus('loading', 'Importing and syncing students...');
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/mentor/students/import', {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/import`, {
                             method: 'POST', body: form
                         });
                         const result = await response.json();
@@ -1259,6 +1265,7 @@
                 });
             }
         });
+        })();
     </script>
 </body>
 </html>

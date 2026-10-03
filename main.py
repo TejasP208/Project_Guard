@@ -1,32 +1,35 @@
 from contextlib import asynccontextmanager
 import logging
+import os
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from zipfile import BadZipFile
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from openpyxl.utils.exceptions import InvalidFileException
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from axiom_ai import Chatbot_stream
 from database import SessionLocal, enable_pgvector, engine, migrate_database
+from clerk_auth import require_clerk_user_id, validate_production_clerk_config
 from mentor_roster import mentor_key, parse_mentor_roster
 from models import Base, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from nlp.checker import run_plagiarism_check
 from group_connect import create_router
 from nlp.extractor import DocumentExtractionError, DocumentLimitError, DocumentValidationError
-from passwords import hash_password, verify_password
 from utils import generate_team_code
 from embeddings import CloudflareEmbeddingClient
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    validate_production_clerk_config()
     # Create all runtime tables in PostgreSQL only after pgvector is enabled.
     enable_pgvector()
     Base.metadata.create_all(bind=engine)
@@ -38,12 +41,217 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(create_router(lambda: SessionLocal()))
 logger = logging.getLogger(__name__)
 
+
+class ClerkProfileLinkRequest(BaseModel):
+    role: Literal["student", "mentor"]
+    roll_no: str | None = None
+    year: str | None = None
+    mentor_name: str | None = None
+
+
+@app.get("/api/config")
+def public_config():
+    """Expose browser-safe configuration only; secret keys stay server-side."""
+    publishable_key = os.getenv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "").strip()
+    if not publishable_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Clerk publishable key is not configured on the server.",
+        )
+    return {"clerk_publishable_key": publishable_key}
+
+
+def resolve_profile_for_clerk_user_id(clerk_user_id: str) -> dict[str, str | None]:
+    """Load the one PostgreSQL profile linked to a verified Clerk subject."""
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+        mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+        if student and mentor:
+            raise HTTPException(status_code=409, detail="Clerk user is linked to multiple application profiles.")
+        if student:
+            if not student.roll_no:
+                raise HTTPException(status_code=409, detail="Linked student profile has no roll number.")
+            return {"role": "student", "identifier": student.roll_no, "year": student.year}
+        if mentor:
+            if not mentor.username:
+                raise HTTPException(status_code=409, detail="Linked mentor profile has no username.")
+            return {"role": "mentor", "identifier": mentor.username, "year": None}
+        raise HTTPException(status_code=403, detail="This Clerk user has no linked application profile.")
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        logger.exception("Failed to resolve the authenticated Clerk profile")
+        raise HTTPException(status_code=503, detail="Application profile lookup is unavailable.") from error
+    finally:
+        db.close()
+
+
+@app.middleware("http")
+async def require_clerk_for_application_routes(request: Request, call_next):
+    """Fail closed by default; allow browser config/docs and retire password auth routes."""
+    path = request.url.path
+    retired_auth_paths = {"/signup", "/login", "/mentor/signup", "/mentor/login"}
+    if request.method == "OPTIONS" or path in {"/api/config", "/openapi.json", "/docs", "/redoc"}:
+        return await call_next(request)
+    if path in retired_auth_paths:
+        return JSONResponse(
+            status_code=410,
+            content={"detail": "Password-based authentication is retired. Use Clerk sign-in or sign-up."},
+        )
+
+    try:
+        clerk_user_id = require_clerk_user_id(request)
+        request.state.clerk_user_id = clerk_user_id
+        if path != "/api/profile/link":
+            request.state.profile = resolve_profile_for_clerk_user_id(clerk_user_id)
+    except HTTPException as error:
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"detail": error.detail},
+            headers=error.headers,
+        )
+    return await call_next(request)
+
+
+def require_profile_role(request: Request, role: str) -> dict[str, str | None]:
+    profile = getattr(request.state, "profile", None)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="A linked Clerk profile is required.")
+    if profile["role"] != role:
+        raise HTTPException(status_code=403, detail=f"A {role} account is required for this action.")
+    return profile
+
+
+@app.get("/api/me")
+def get_current_profile(request: Request):
+    """Return the application profile for a valid Clerk session token."""
+    return request.state.profile
+
+
+@app.post("/api/profile/link")
+def link_clerk_profile(data: ClerkProfileLinkRequest, request: Request):
+    """Create a PostgreSQL profile bound to the verified Clerk session subject."""
+    clerk_user_id = request.state.clerk_user_id
+    db = SessionLocal()
+    try:
+        linked_student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+        linked_mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+
+        if data.role == "student":
+            roll_no = (data.roll_no or "").strip()
+            if not roll_no:
+                raise HTTPException(status_code=422, detail="Roll number is required.")
+            if linked_mentor:
+                raise HTTPException(status_code=409, detail="This Clerk user is already linked as a mentor.")
+            if linked_student:
+                if linked_student.roll_no != roll_no:
+                    raise HTTPException(status_code=409, detail="This Clerk user is already linked to another roll number.")
+                if data.year is not None:
+                    linked_student.year = data.year.strip()
+                db.commit()
+                return {
+                    "role": "student",
+                    "clerk_user_id": clerk_user_id,
+                    "roll_no": linked_student.roll_no,
+                    "year": linked_student.year,
+                }
+
+            existing_student = db.query(Student).filter(
+                func.lower(Student.roll_no) == roll_no.lower()
+            ).first()
+            if existing_student:
+                message = "This roll number already has a PostgreSQL profile. Existing accounts must be linked manually."
+                if existing_student.clerk_user_id:
+                    message = "This roll number is already linked to another Clerk user."
+                raise HTTPException(status_code=409, detail=message)
+
+            profile = Student(
+                roll_no=roll_no,
+                year=(data.year or "").strip() or None,
+                clerk_user_id=clerk_user_id,
+            )
+            db.add(profile)
+            db.commit()
+            return {
+                "role": "student",
+                "clerk_user_id": clerk_user_id,
+                "roll_no": profile.roll_no,
+                "year": profile.year,
+            }
+
+        mentor_name = (data.mentor_name or "").strip()
+        if not mentor_name:
+            raise HTTPException(status_code=422, detail="Mentor name is required.")
+        if linked_student:
+            raise HTTPException(status_code=409, detail="This Clerk user is already linked as a student.")
+        if linked_mentor:
+            if (linked_mentor.username or "").casefold() != mentor_name.casefold():
+                raise HTTPException(status_code=409, detail="This Clerk user is already linked to another mentor name.")
+            db.commit()
+            return {
+                "role": "mentor",
+                "clerk_user_id": clerk_user_id,
+                "mentor_name": linked_mentor.username,
+            }
+
+        existing_mentor = db.query(Mentor).filter(
+            func.lower(Mentor.username) == mentor_name.lower()
+        ).first()
+        if existing_mentor:
+            message = "This mentor profile already exists in PostgreSQL. Existing accounts must be linked manually."
+            if existing_mentor.clerk_user_id:
+                message = "This mentor name is already linked to another Clerk user."
+            raise HTTPException(status_code=409, detail=message)
+
+        profile = Mentor(username=mentor_name, clerk_user_id=clerk_user_id)
+        db.add(profile)
+        db.commit()
+        return {
+            "role": "mentor",
+            "clerk_user_id": clerk_user_id,
+            "mentor_name": profile.username,
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This profile or Clerk user is already linked.") from error
+    except SQLAlchemyError as error:
+        db.rollback()
+        logger.exception("Failed to link a Clerk profile to PostgreSQL")
+        raise HTTPException(status_code=500, detail="Could not save the application profile.") from error
+    finally:
+        db.close()
+
 MAX_PLAGIARISM_UPLOAD_BYTES = 20 * 1024 * 1024
 
 # Middleware
+def _is_production_environment() -> bool:
+    return os.getenv("APP_ENV", "").strip().lower() == "production" or os.getenv("RENDER", "").lower() == "true"
+
+
+def _configured_origins() -> list[str]:
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        if _is_production_environment():
+            raise RuntimeError("CORS_ALLOWED_ORIGINS must list the deployed HTTPS frontend origin(s).")
+        return ["http://127.0.0.1:5500", "http://localhost:5500"]
+
+    origins = [value.strip().rstrip("/") for value in raw.split(",") if value.strip()]
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+            raise RuntimeError("CORS_ALLOWED_ORIGINS must contain only exact origins, without paths or wildcards.")
+        if _is_production_environment() and parsed.scheme != "https":
+            raise RuntimeError("Production CORS_ALLOWED_ORIGINS entries must use HTTPS.")
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_configured_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -131,6 +339,7 @@ class MentorAxiomRequest(BaseModel):
 # Endpoints
 @app.get("/chat-stream")
 async def chat_stream(prompt: str):
+    # Middleware requires a verified, linked student or mentor profile.
     return StreamingResponse(
         Chatbot_stream(prompt),
         media_type="text/plain; charset=utf-8",
@@ -143,7 +352,8 @@ async def chat_stream(prompt: str):
 
 
 @app.post("/mentor/axiom-stream")
-async def mentor_axiom_stream(data: MentorAxiomRequest):
+async def mentor_axiom_stream(data: MentorAxiomRequest, request: Request):
+    require_profile_role(request, "mentor")
     question = data.question.strip()
     title = data.project_title.strip()
     if not question:
@@ -174,49 +384,20 @@ async def mentor_axiom_stream(data: MentorAxiomRequest):
 
 
 @app.post("/signup")
-def signup(data: SignupRequest):
-    db = SessionLocal()
-    try:
-        if db.query(Student).filter(Student.roll_no == data.roll_no).first():
-            raise HTTPException(status_code=400, detail="Roll number already registered")
-        
-        hashed_password = hash_password(data.password)
-        new_student = Student(
-            roll_no=data.roll_no,
-            password=hashed_password,
-            year=data.year
-        )
-        db.add(new_student)
-        db.commit()
-        return {"message": "Signup successful"}
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+def signup():
+    raise HTTPException(status_code=410, detail="Password-based sign-up is retired. Use Clerk.")
 
 @app.post("/login")
-def login(data: LoginRequest):
-    db = SessionLocal()
-    try:
-        student = db.query(Student).filter(Student.roll_no == data.roll_no).first()
-        if not student or not student.password or not verify_password(data.password, student.password):
-            raise HTTPException(status_code=401, detail="Invalid roll number or password")
-        return {
-            "message": "Login successful",
-            "roll_no": student.roll_no,
-            "year": student.year
-        }
-    finally:
-        db.close()
+def login():
+    raise HTTPException(status_code=410, detail="Password-based sign-in is retired. Use Clerk.")
 
 @app.post("/create-team")
-def create_team(data: CreateTeamRequest):
+def create_team(data: CreateTeamRequest, request: Request):
+    profile = require_profile_role(request, "student")
+    roll_no = profile["identifier"]
     db = SessionLocal()
     try:
-        if data.roll_no and db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
+        if db.query(TeamMember).filter(TeamMember.roll_no == roll_no).first():
             raise HTTPException(status_code=400, detail="You are already in a team. You cannot create another one.")
 
         code = generate_team_code()
@@ -232,9 +413,8 @@ def create_team(data: CreateTeamRequest):
         db.add(new_team)
         db.flush() # get new_team.id before commit to link member
         
-        if data.roll_no:
-            member = TeamMember(team_id=new_team.id, roll_no=data.roll_no)
-            db.add(member)
+        member = TeamMember(team_id=new_team.id, roll_no=roll_no)
+        db.add(member)
 
         db.commit()
         db.refresh(new_team)
@@ -255,10 +435,12 @@ def create_team(data: CreateTeamRequest):
         db.close()
 
 @app.post("/join-team")
-def join_team(data: JoinTeamRequest):
+def join_team(data: JoinTeamRequest, request: Request):
+    profile = require_profile_role(request, "student")
+    roll_no = profile["identifier"]
     db = SessionLocal()
     try:
-        if data.roll_no and db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first():
+        if db.query(TeamMember).filter(TeamMember.roll_no == roll_no).first():
             raise HTTPException(status_code=400, detail="You are already in a team. You cannot join multiple teams.")
 
         team = db.query(Team).filter(Team.team_code == data.team_code).first()
@@ -269,7 +451,7 @@ def join_team(data: JoinTeamRequest):
         if current_members >= (team.max_members or 4):
             raise HTTPException(status_code=400, detail="Team is full")
         
-        new_member = TeamMember(team_id=team.id, roll_no=data.roll_no)
+        new_member = TeamMember(team_id=team.id, roll_no=roll_no)
         db.add(new_member)
         db.commit()
 
@@ -292,7 +474,8 @@ def join_team(data: JoinTeamRequest):
         db.close()
 
 @app.get("/get-student-team")
-def get_student_team(roll_no: str):
+def get_student_team(request: Request, roll_no: str | None = None):
+    roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
         member = db.query(TeamMember).filter(TeamMember.roll_no == roll_no).first()
@@ -318,10 +501,11 @@ def get_student_team(roll_no: str):
         db.close()
 
 @app.post("/leave-team")
-def leave_team(data: LeaveTeamRequest):
+def leave_team(data: LeaveTeamRequest, request: Request):
+    roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
-        member = db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first()
+        member = db.query(TeamMember).filter(TeamMember.roll_no == roll_no).first()
         if not member:
             raise HTTPException(status_code=400, detail="You are not currently in a team.")
         
@@ -347,11 +531,12 @@ def leave_team(data: LeaveTeamRequest):
         db.close()
 
 @app.post("/submit-project")
-def submit_project(data: ProjectSubmission):
+def submit_project(data: ProjectSubmission, request: Request):
+    roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
         # Find if the user is in a team
-        member = db.query(TeamMember).filter(TeamMember.roll_no == data.roll_no).first()
+        member = db.query(TeamMember).filter(TeamMember.roll_no == roll_no).first()
         if not member:
             raise HTTPException(status_code=400, detail="You must join a team to submit a project")
             
@@ -359,7 +544,7 @@ def submit_project(data: ProjectSubmission):
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
 
-        student = db.query(Student).filter(Student.roll_no == data.roll_no).first()
+        student = db.query(Student).filter(Student.roll_no == roll_no).first()
         year = student.year if student else (team.year or "")
 
         new_project = Project(
@@ -419,46 +604,16 @@ async def check_plagiarism(
 # ── Mentor Endpoints ──────────────────────────────────────────────
 
 @app.post("/mentor/signup")
-def mentor_signup(data: MentorSignupRequest):
-    db = SessionLocal()
-    try:
-        username = data.username.strip()
-        if db.query(Mentor).filter(func.lower(Mentor.username) == username.lower()).first():
-            raise HTTPException(status_code=400, detail="Username already registered")
-
-        hashed_password = hash_password(data.password)
-        new_mentor = Mentor(
-            username=username,
-            password=hashed_password
-        )
-        db.add(new_mentor)
-        db.commit()
-        return {"message": "Mentor account created successfully"}
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+def mentor_signup():
+    raise HTTPException(status_code=410, detail="Password-based sign-up is retired. Use Clerk.")
 
 @app.post("/mentor/login")
-def mentor_login(data: MentorLoginRequest):
-    db = SessionLocal()
-    try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.username.strip().lower()).first()
-        if not mentor or not mentor.password or not verify_password(data.password, mentor.password):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-        return {
-            "message": "Login successful",
-            "username": mentor.username,
-            "role": "mentor"
-        }
-    finally:
-        db.close()
+def mentor_login():
+    raise HTTPException(status_code=410, detail="Password-based sign-in is retired. Use Clerk.")
 
 @app.get("/api/projects")
-def list_projects():
+def list_projects(request: Request):
+    require_profile_role(request, "mentor")
     db = SessionLocal()
     try:
         projects = db.query(Project).all()
@@ -477,7 +632,8 @@ def list_projects():
         db.close()
 
 @app.get("/api/students")
-def get_students() -> list[dict[str, str | int | None]]:
+def get_students(request: Request) -> list[dict[str, str | int | None]]:
+    require_profile_role(request, "mentor")
     db = SessionLocal()
     try:
         students: list[Student] = db.query(Student).all()
@@ -508,9 +664,11 @@ def get_students() -> list[dict[str, str | int | None]]:
 
 @app.post("/mentor/students/import")
 async def import_mentor_students(
-    mentor_user: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
+    request: Request,
+    mentor_user: Annotated[str | None, Form()] = None,
 ):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Upload an .xlsx Excel file.")
     content = await file.read(5 * 1024 * 1024 + 1)
@@ -558,7 +716,8 @@ async def import_mentor_students(
 
 
 @app.get("/mentor/students")
-def get_mentor_students(mentor_user: str) -> list[dict[str, str | int]]:
+def get_mentor_students(request: Request, mentor_user: str | None = None) -> list[dict[str, str | int]]:
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
@@ -597,10 +756,11 @@ def get_mentor_students(mentor_user: str) -> list[dict[str, str | int]]:
 
 
 @app.post("/team-invitations", status_code=201)
-def create_team_invitation(data: TeamInviteRequest):
+def create_team_invitation(data: TeamInviteRequest, request: Request):
+    inviter_roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
-        inviter_roll = data.inviter_roll_no.strip()
+        inviter_roll = inviter_roll_no
         invitee_input = data.invitee_roll_no.strip()
         inviter_member = db.query(TeamMember).filter(TeamMember.roll_no == inviter_roll).first()
         if not inviter_member:
@@ -644,7 +804,8 @@ def create_team_invitation(data: TeamInviteRequest):
 
 
 @app.get("/team-invitations")
-def get_team_invitations(roll_no: str):
+def get_team_invitations(request: Request, roll_no: str | None = None):
+    roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
         invitations = db.query(TeamInvitation).filter(
@@ -668,7 +829,8 @@ def get_team_invitations(roll_no: str):
 
 
 @app.patch("/team-invitations/{invitation_id}")
-def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse):
+def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse, request: Request):
+    roll_no = require_profile_role(request, "student")["identifier"]
     action = data.action.strip().lower()
     if action not in {"accept", "decline"}:
         raise HTTPException(status_code=400, detail="Invitation action must be accept or decline.")
@@ -676,7 +838,7 @@ def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse):
     try:
         invitation = db.query(TeamInvitation).filter(
             TeamInvitation.id == invitation_id,
-            func.lower(TeamInvitation.invitee_roll_no) == data.roll_no.strip().lower(),
+            func.lower(TeamInvitation.invitee_roll_no) == roll_no.strip().lower(),
             TeamInvitation.status == "pending",
         ).first()
         if not invitation:
@@ -733,7 +895,8 @@ def review_payload(review: MentorReview):
 
 
 @app.get("/mentor/dashboard")
-def get_mentor_dashboard(mentor_user: str):
+def get_mentor_dashboard(request: Request, mentor_user: str | None = None):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
@@ -761,10 +924,11 @@ def get_mentor_dashboard(mentor_user: str):
 
 
 @app.post("/mentor/reviews", status_code=201)
-def create_mentor_review(data: MentorReviewCreate):
+def create_mentor_review(data: MentorReviewCreate, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.mentor_user.strip().lower()).first()
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         group_number = data.group_number.strip()
@@ -803,12 +967,13 @@ def create_mentor_review(data: MentorReviewCreate):
 
 
 @app.patch("/mentor/reviews/{review_id}")
-def update_mentor_review_status(review_id: int, data: MentorReviewStatus):
+def update_mentor_review_status(review_id: int, data: MentorReviewStatus, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     if data.status not in {"completed", "cancelled"}:
         raise HTTPException(status_code=400, detail="Review status must be completed or cancelled.")
     db = SessionLocal()
     try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.mentor_user.strip().lower()).first()
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         review = db.query(MentorReview).filter(
@@ -826,10 +991,11 @@ def update_mentor_review_status(review_id: int, data: MentorReviewStatus):
 
 
 @app.post("/mentor/students", status_code=201)
-def add_mentor_student(data: MentorStudentCreate):
+def add_mentor_student(data: MentorStudentCreate, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.mentor_user.strip().lower()).first()
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         name = " ".join(data.student_name.split())
@@ -879,10 +1045,11 @@ def add_mentor_student(data: MentorStudentCreate):
 
 
 @app.put("/mentor/students/{roster_id}")
-def update_mentor_student(roster_id: int, data: MentorStudentUpdate):
+def update_mentor_student(roster_id: int, data: MentorStudentUpdate, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == data.mentor_user.strip().lower()).first()
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         entry = db.query(MentorStudent).filter(
@@ -912,7 +1079,8 @@ def update_mentor_student(roster_id: int, data: MentorStudentUpdate):
 
 
 @app.delete("/mentor/students/{roster_id}")
-def delete_mentor_student(roster_id: int, mentor_user: str):
+def delete_mentor_student(roster_id: int, request: Request, mentor_user: str | None = None):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
     db = SessionLocal()
     try:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()

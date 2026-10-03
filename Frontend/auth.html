@@ -20,7 +20,7 @@
         }
     </style>
 </head>
-<body>
+<body data-portal="student">
     <div class="auth-container">
         <div class="auth-card glass-card">
             <div class="auth-header">
@@ -81,6 +81,7 @@
                         <input type="password" id="confirm-pass" placeholder="••••••••" required>
                     </div>
                 </div>
+                <div id="clerk-captcha"></div>
                 <button type="submit" class="btn btn-primary auth-btn">
                     <span>Create Account</span>
                     <i class="ph ph-user-plus"></i>
@@ -90,6 +91,8 @@
         </div>
     </div>
 
-    <script src="auth.js"></script>
+    <script src="deployment-config.js"></script>
+    <script src="clerk-config.js"></script>
+    <script src="auth.js?v=clerk-auth-1"></script>
 </body>
 </html>
