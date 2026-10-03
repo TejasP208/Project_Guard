@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const showSignup = document.getElementById('show-signup');
     const showLogin = document.getElementById('show-login');
     const destination = isMentor ? 'mentor_index.html' : 'index.html';
-
+    const expectedRole = isMentor ? 'mentor' : 'student';
     const showAuthError = (form, message) => {
         let error = form.querySelector('[role="alert"]');
         if (!error) {
@@ -54,6 +54,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         return result;
     };
 
+    const getLinkedProfile = async (clerk) => {
+        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/me`);
+        const profile = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const error = new Error(profile.detail || 'Could not verify your Project Guard profile.');
+            error.status = response.status;
+            if (response.status === 401 || response.status === 403) {
+                await clerk.signOut();
+            }
+            throw error;
+        }
+        if (!['student', 'mentor'].includes(profile.role)) {
+            throw new Error('The server returned an invalid Project Guard profile.');
+        }
+        return profile;
+    };
+
+    const requirePortalRole = async (clerk, profile) => {
+        if (profile.role !== expectedRole) {
+            await clerk.signOut();
+            const error = new Error(`This account is linked as a ${profile.role}. Please sign in through the ${profile.role} portal.`);
+            error.portalRoleMismatch = true;
+            throw error;
+        }
+        return profile;
+    };
+
     const setBusy = (form, busy, label) => {
         const button = form.querySelector('button[type="submit"]');
         if (!button) return;
@@ -95,8 +122,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const clerk = await window.projectGuardClerkReady;
         if (clerk.isSignedIn) {
-            window.location.replace(destination);
-            return;
+            try {
+                await requirePortalRole(clerk, await getLinkedProfile(clerk));
+                window.location.replace(destination);
+                return;
+            } catch (error) {
+                if (error.portalRoleMismatch) {
+                    showAuthError(loginForm, error.message);
+                } else if (error.status === 401 || error.status === 403) {
+                    showAuthError(loginForm, error.message);
+                } else {
+                    throw error;
+                }
+            }
         }
 
         for (const form of [loginForm, signupForm]) {
@@ -122,9 +160,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         : `Clerk sign-in needs another step (${attempt.status}).`);
                 }
                 await clerk.setActive({ session: attempt.createdSessionId });
+                await requirePortalRole(clerk, await getLinkedProfile(clerk));
                 window.location.assign(destination);
             } catch (error) {
-                showAuthError(loginForm, clerkErrorMessage(error));
+                if (error.portalRoleMismatch) {
+                    showAuthError(loginForm, error.message);
+                } else {
+                    showAuthError(loginForm, clerkErrorMessage(error));
+                }
                 setBusy(loginForm, false);
             }
         });
