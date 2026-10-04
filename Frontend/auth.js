@@ -6,7 +6,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const authSubtitle = document.getElementById('auth-subtitle');
     const showSignup = document.getElementById('show-signup');
     const showLogin = document.getElementById('show-login');
+    document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
+        toggle.addEventListener('click', () => {
+            const input = document.getElementById(toggle.dataset.passwordToggle);
+            const showing = input.type === 'password';
+            input.type = showing ? 'text' : 'password';
+            toggle.setAttribute('aria-pressed', String(showing));
+            toggle.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+            toggle.querySelector('i').className = showing ? 'ph ph-eye-slash' : 'ph ph-eye';
+        });
+    });
     const destination = isMentor ? 'mentor_index.html' : 'index.html';
+    const returnTo = new URLSearchParams(window.location.search).get('redirect_url');
+    const targetPage = returnTo === destination ? returnTo : destination;
     const expectedRole = isMentor ? 'mentor' : 'student';
     const showAuthError = (form, message) => {
         let error = form.querySelector('[role="alert"]');
@@ -49,7 +61,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(result.detail || 'Could not save your application profile.');
+            const error = new Error(result.detail || 'Could not save your application profile.');
+            error.status = response.status;
+            throw error;
         }
         return result;
     };
@@ -124,7 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (clerk.isSignedIn) {
             try {
                 await requirePortalRole(clerk, await getLinkedProfile(clerk));
-                window.location.replace(destination);
+                window.location.replace(targetPage);
                 return;
             } catch (error) {
                 if (error.portalRoleMismatch) {
@@ -161,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 await clerk.setActive({ session: attempt.createdSessionId });
                 await requirePortalRole(clerk, await getLinkedProfile(clerk));
-                window.location.assign(destination);
+                window.location.assign(targetPage);
             } catch (error) {
                 if (error.portalRoleMismatch) {
                     showAuthError(loginForm, error.message);
@@ -206,9 +220,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await linkProfileToPostgres(clerk, isMentor
                     ? { role: 'mentor', mentor_name: username }
                     : { role: 'student', roll_no: username, year: studentYear });
-                window.location.assign(destination);
+                window.location.assign(targetPage);
             } catch (error) {
-                showAuthError(signupForm, clerkErrorMessage(error));
+                const detail = clerkErrorMessage(error);
+                const profileConflict = error.status === 409 && /PostgreSQL|already linked|already exists/i.test(detail);
+                if (clerk.isSignedIn) {
+                    try {
+                        await clerk.signOut();
+                    } catch (signOutError) {
+                        console.error('Could not clear the incomplete signup session:', signOutError);
+                    }
+                }
+                showAuthError(signupForm, profileConflict
+                    ? `${detail} If this is your existing test account, ask an administrator to link the PostgreSQL profile to your Clerk user. For a stale test-only profile, an administrator must confirm and remove the row before you retry.`
+                    : detail);
                 setBusy(signupForm, false);
             }
         });

@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=password-field-4">
     <style>
         /* Auth specific overrides/additions if needed, though most will be in style.css */
         body {
@@ -38,14 +38,14 @@
                     <label for="login-roll">Mentor Name</label>
                     <div class="input-wrapper">
                         <i class="ph ph-user"></i>
-                        <input type="text" id="login-roll" placeholder="Enter Mentor Name" required>
+                        <input type="text" id="login-roll" placeholder="Enter Mentor Name" autocomplete="username" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="login-pass">Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="login-pass" placeholder="••••••••" required>
+                        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="login-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary auth-btn">
@@ -61,21 +61,21 @@
                     <label for="signup-id">Mentor Name</label>
                     <div class="input-wrapper">
                         <i class="ph ph-user"></i>
-                        <input type="text" id="signup-id" placeholder="Enter Mentor Name" required>
+                        <input type="text" id="signup-id" placeholder="Enter Mentor Name" autocomplete="username" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="signup-pass">Create Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="signup-pass" placeholder="••••••••" required>
+                        <input type="password" id="signup-pass" placeholder="••••••••" autocomplete="new-password" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="signup-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="signup-confirm-pass">Confirm Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="signup-confirm-pass" placeholder="••••••••" required>
+                        <input type="password" id="signup-confirm-pass" placeholder="••••••••" autocomplete="off" data-lpignore="true" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="signup-confirm-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <div id="clerk-captcha"></div>
@@ -89,7 +89,7 @@
     </div>
 
     <script src="deployment-config.js"></script>
-    <script src="clerk-config.js"></script>
-    <script src="auth.js?v=clerk-auth-5"></script>
+    <script src="clerk-config.js?v=clerk-token-2"></script>
+    <script src="auth.js?v=clerk-auth-8"></script>
 </body>
 </html>

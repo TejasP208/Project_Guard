@@ -61,11 +61,13 @@ window.projectGuardClerkReady = (async () => {
             throw new Error('projectGuardApiFetch only supports the configured application API.');
         }
         const url = new URL(`${target.pathname}${target.search}${target.hash}`, apiOrigin);
-        const token = await window.Clerk.session?.getToken();
-        if (!token) throw new Error('Sign in is required to call the application API.');
         const headers = new Headers(input instanceof Request ? input.headers : undefined);
         new Headers(init.headers).forEach((value, key) => headers.set(key, value));
-        headers.set('Authorization', `Bearer ${token}`);
+        if (!headers.has('Authorization')) {
+            const token = await window.Clerk.session?.getToken();
+            if (!token) throw new Error('No active Clerk session token is available. Sign in again and retry.');
+            headers.set('Authorization', `Bearer ${token}`);
+        }
         return fetch(url, {...init, headers});
     };
     return window.Clerk;

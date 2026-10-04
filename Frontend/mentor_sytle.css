@@ -587,6 +587,54 @@ input[type="text"]:focus, textarea:focus {
     padding-left: 48px;
 }
 
+.input-wrapper input[data-password-input] { padding-left: 48px !important; }
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transform: translateY(-50%);
+}
+.password-toggle:hover,
+.password-toggle:focus-visible { color: var(--primary); }
+.password-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.password-toggle i { position: static; font-size: 1.2rem; }
+
+.account-actions-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: rgba(15, 23, 42, 0.48);
+}
+.account-actions-overlay[hidden] { display: none; }
+.account-actions-dialog {
+    width: min(100%, 30rem);
+    padding: 1.75rem;
+    border-radius: var(--radius-md);
+    background: white;
+    box-shadow: 0 18px 60px rgba(15, 23, 42, 0.28);
+}
+.account-actions-dialog h2 { margin: 0 0 .75rem; }
+.account-actions-dialog p { color: var(--text-muted); line-height: 1.5; }
+.account-actions-error { color: #b91c1c !important; }
+.account-actions-buttons { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; margin-top: 1.5rem; }
+.account-actions-delete { background: #dc2626; color: white; border: 0; }
+.account-actions-delete:hover { background: #b91c1c; }
+
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

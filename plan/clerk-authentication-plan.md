@@ -66,3 +66,21 @@ Every API route that returns or changes application data must require authentica
 - Fake accounts and test data remain during development and will be deleted before real data is allocated.
 - Mentor approval/admin controls are the final implementation step.
 - No API route that exposes application data will remain public.
+
+## Authentication issue review (2026-10-04)
+
+- [x] Add password-manager autocomplete hints and prevent password managers from treating confirmation as a second password field.
+- [x] Add accessible show/hide controls to student and mentor password fields.
+- [x] Clear the newly created Clerk session when signup cannot link its profile in PostgreSQL, so the user can retry another identifier or sign in.
+- [x] Explain when a PostgreSQL profile already exists and needs administrator linking or stale-test-account review.
+- [ ] Investigate reports of missing Clerk tokens on other browsers/devices. Capture the failing endpoint, browser console message, and API status; check Clerk allowed origins/authorized parties and browser network access to the Clerk Frontend API.
+- [ ] Reconcile PostgreSQL student/mentor profile rows against this test inventory; delete only individually confirmed stale test rows and related test-only data after backup and review.
+- [ ] Confirm Clerk development instance signup requirements, allowed origins, and whether usernames without email are supported for all teammates.
+
+### Further auth checks for the next pass
+
+- Validate Clerk sign-in/sign-up on Chrome, Safari, and Firefox, including browser password managers and paste.
+- Test a new identifier, an existing unlinked PostgreSQL test profile, an already linked identifier, and an account created in Clerk before a profile-link failure.
+- Verify `/api/config` loads for each teammate and inspect the actual `/api/profile/link` response when they see “token missing”; distinguish browser token acquisition from backend token verification.
+- Keep the deployed frontend origin identical to the configured Clerk allowed origins, `CLERK_AUTHORIZED_PARTIES`, and `CORS_ALLOWED_ORIGINS` entries.
+- Rotate any credentials that were previously shared in plaintext and keep secrets out of source files and test inventories.

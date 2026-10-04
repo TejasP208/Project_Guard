@@ -14,6 +14,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from clerk_backend_api import Clerk
 
 from axiom_ai import Chatbot_stream
 from database import SessionLocal, enable_pgvector, engine, migrate_database
@@ -127,6 +128,44 @@ def require_profile_role(request: Request, role: str) -> dict[str, str | None]:
 def get_current_profile(request: Request):
     """Return the application profile for a valid Clerk session token."""
     return request.state.profile
+
+
+@app.delete("/api/account")
+def delete_current_account(request: Request):
+    """Remove the caller's app profile and Clerk identity, preserving academic data."""
+    clerk_user_id = request.state.clerk_user_id
+    profile = request.state.profile
+    db = SessionLocal()
+    try:
+        if profile["role"] == "student":
+            account = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+        else:
+            account = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Your application profile no longer exists.")
+
+        secret_key = os.getenv("CLERK_SECRET_KEY", "").strip()
+        if not secret_key:
+            raise HTTPException(status_code=503, detail="Clerk account deletion is not configured.")
+
+        # Remove credentials first. Team, roster, invitation, review, and project
+        # rows intentionally remain because they are not login-profile records.
+        Clerk(bearer_auth=secret_key).users.delete(user_id=clerk_user_id, timeout_ms=10_000)
+        db.delete(account)
+        db.commit()
+        return {"message": "Account deleted.", "role": profile["role"]}
+    except HTTPException:
+        db.rollback()
+        raise
+    except SQLAlchemyError as error:
+        db.rollback()
+        logger.exception("Clerk user was deleted but the application profile could not be removed")
+        raise HTTPException(status_code=500, detail="Your Clerk account was deleted, but the application profile could not be removed.") from error
+    except Exception as error:  # Clerk SDK errors are intentionally not exposed to the browser.
+        logger.exception("Could not delete Clerk account")
+        raise HTTPException(status_code=503, detail="Could not delete the Clerk account. Please try again.") from error
+    finally:
+        db.close()
 
 
 @app.post("/api/profile/link")

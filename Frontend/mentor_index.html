@@ -10,12 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css">
+    <link rel="stylesheet" href="mentor_sytle.css?v=account-actions-2">
     <link rel="stylesheet" href="group_connect.css">
     <script src="group_connect.js" defer></script>
     <script src="deployment-config.js"></script>
-    <script src="clerk-config.js"></script>
-    <script src="portal-session-guard.js?v=clerk-guard-5"></script>
+    <script src="clerk-config.js?v=clerk-token-2"></script>
+    <script src="portal-session-guard.js?v=clerk-guard-6"></script>
 </head>
 <body data-portal="mentor">
     <div class="app-container">
@@ -556,18 +556,6 @@
                 }
             });
         }
-
-        // Logout
-        document.getElementById('logout-btn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            try {
-                const clerk = await window.projectGuardClerkReady;
-                await clerk.signOut({ redirectUrl: 'mentor_auth.html' });
-            } catch (error) {
-                console.error('Clerk sign-out failed:', error);
-                alert('Could not sign out. Please try again.');
-            }
-        });
 
         // ============================================
         // Mentor Dashboard - Navigation & View Switching
@@ -1267,5 +1255,6 @@
         }
         })();
     </script>
+    <script src="account-actions.js?v=account-actions-2"></script>
 </body>
 </html>

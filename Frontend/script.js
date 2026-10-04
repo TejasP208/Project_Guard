@@ -95,21 +95,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            try {
-                const clerk = await window.projectGuardClerkReady;
-                await clerk.signOut();
-                window.location.replace('auth.html');
-            } catch (error) {
-                console.error('Clerk sign-out failed:', error);
-                alert(`Could not sign out: ${error.message || 'Please try again.'}`);
-            }
-        });
-    }
-
     const inviteModal = document.getElementById('team-invite-modal');
     const notificationsModal = document.getElementById('team-notifications-modal');
     const inviteFeedback = document.getElementById('team-invite-feedback');

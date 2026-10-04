@@ -5,6 +5,9 @@ document.documentElement.style.visibility = 'hidden';
 const portalSignInPage = () => document.body.dataset.portal === 'mentor'
     ? 'mentor_auth.html'
     : 'auth.html';
+const portalDestination = () => document.body.dataset.portal === 'mentor'
+    ? 'mentor_index.html'
+    : 'index.html';
 
 const showSessionError = (message, actionLabel, action) => {
     document.documentElement.style.visibility = '';
@@ -32,9 +35,13 @@ window.projectGuardSessionReady = (async () => {
         clerk = await window.projectGuardClerkReady;
         if (!clerk.isSignedIn) {
             showSessionError(
-                'No active Clerk session was found. Sign in to open this portal.',
-                'Go to sign in',
-                () => window.location.assign(portalSignInPage()),
+                'You opened the portal without a signed-in session. Sign in to continue.',
+                'Sign in',
+                () => {
+                    const signInUrl = new URL(portalSignInPage(), window.location.href);
+                    signInUrl.searchParams.set('redirect_url', portalDestination());
+                    window.location.assign(signInUrl);
+                },
             );
             return null;
         }

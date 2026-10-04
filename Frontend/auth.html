@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=password-field-4">
     <style>
         /* Auth specific overrides/additions if needed, though most will be in style.css */
         body {
@@ -38,14 +38,14 @@
                     <label for="login-roll">Roll Number</label>
                     <div class="input-wrapper">
                         <i class="ph ph-user"></i>
-                        <input type="text" id="login-roll" placeholder="Enter your Roll Number" required>
+                        <input type="text" id="login-roll" placeholder="Enter your Roll Number" autocomplete="username" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="login-pass">Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="login-pass" placeholder="••••••••" required>
+                        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="login-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary auth-btn">
@@ -60,7 +60,7 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="roll-1">Roll Number</label>
-                        <input type="text" id="roll-1" placeholder="Student" required>
+                        <input type="text" id="roll-1" placeholder="Student" autocomplete="username" required>
                     </div>
                     <div class="form-group">
                         <label for="year">Year</label>
@@ -70,15 +70,15 @@
                 <div class="form-group">
                     <label for="signup-pass">Create Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="signup-pass" placeholder="••••••••" required>
+                        <input type="password" id="signup-pass" placeholder="••••••••" autocomplete="new-password" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="signup-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="confirm-pass">Confirm Password</label>
                     <div class="input-wrapper">
-                        <i class="ph ph-lock"></i>
-                        <input type="password" id="confirm-pass" placeholder="••••••••" required>
+                        <input type="password" id="confirm-pass" placeholder="••••••••" autocomplete="off" data-lpignore="true" data-password-input required>
+                        <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="confirm-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
                 <div id="clerk-captcha"></div>
@@ -92,7 +92,7 @@
     </div>
 
     <script src="deployment-config.js"></script>
-    <script src="clerk-config.js"></script>
-    <script src="auth.js?v=clerk-auth-5"></script>
+    <script src="clerk-config.js?v=clerk-token-2"></script>
+    <script src="auth.js?v=clerk-auth-8"></script>
 </body>
 </html>
