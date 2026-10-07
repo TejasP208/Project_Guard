@@ -1,7 +1,9 @@
 # Cloudflare Qwen embeddings
 
-This module generates one vector for one text input. It does not change the
-current plagiarism checker or its SBERT index.
+This module provides the server-side Qwen embedding client used by the
+PostgreSQL-backed project submission, indexing, search, and plagiarism-check
+paths. PostgreSQL stores project vectors in the `projects.embedding` pgvector
+column. The legacy SBERT `.npy` index and scripts remain separate local tools.
 
 ## Configuration
 
@@ -24,19 +26,21 @@ vector = CloudflareEmbeddingClient().embed(
 
 `embed(text)` accepts a nonempty string and returns a list of 1024 finite
 floats. It raises `ValueError` for empty input or missing configuration and
-`EmbeddingError` for a failed request or invalid response. It does not
-normalize the returned values; the future similarity query should compute
-cosine similarity. The model is `@cf/qwen/qwen3-embedding-0.6b`, and the
-request sends `{"text": [text]}` to Cloudflare Workers AI.
+`EmbeddingError` for a failed request or invalid response. The model is
+`@cf/qwen/qwen3-embedding-0.6b`, and the request sends `{"text": [text]}` to
+Cloudflare Workers AI. Project search and plagiarism checks compare stored
+vectors with cosine distance through pgvector.
 
 The project index uses `"{project_name}. {project_abstract}"`; changing this
-format requires re-embedding indexed projects. For plagiarism checks, the
-title/description and all extracted document chunks are embedded separately.
-The strongest chunk match is used for each stored project. Documents are
-split into chunks of up to 3000 characters with a 200-character overlap,
-preferring sentence boundaries and then word boundaries. More than 32 document
-chunks produces a clear error before scoring; this cap also applies to the
-extracted text used by the lexical score. `embed_many(texts)` batches up to eight texts per
+format requires re-embedding indexed projects. The indexer fills missing
+project vectors; the configured PostgreSQL database currently has vectors for
+all 72 project records (checked 2026-10-06). For plagiarism checks, the
+title/description and document text are embedded separately, and the strongest
+chunk match is used for each stored project. Documents support chunks of up to
+3000 characters with a 200-character overlap, preferring sentence boundaries
+and then word boundaries. The checker currently truncates extracted document
+text to its first 500 normalized characters before chunking, so longer uploads
+are not fully covered yet. `embed_many(texts)` batches up to eight texts per
 Cloudflare request and returns one vector for each input in order.
 
 The combined TF-IDF/Qwen score and 30% frontend cutoff are provisional. To

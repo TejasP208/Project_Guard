@@ -9,6 +9,25 @@ const portalDestination = () => document.body.dataset.portal === 'mentor'
     ? 'mentor_index.html'
     : 'index.html';
 
+const getSettledSessionToken = async (clerk) => {
+    // Treat the active session/token as the source of truth. `isSignedIn` is a
+    // convenience state flag and can briefly lag session restoration after a
+    // redirect, so it must not prevent a token request.
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+        const session = clerk.session;
+        if (session && typeof session.getToken === 'function') {
+            try {
+                const token = await session.getToken();
+                if (token) return token;
+            } catch (error) {
+                if (attempt === 29) throw error;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return null;
+};
+
 const showSessionError = (message, actionLabel, action) => {
     document.documentElement.style.visibility = '';
     const panel = document.createElement('main');
@@ -33,9 +52,16 @@ window.projectGuardSessionReady = (async () => {
     let clerk;
     try {
         clerk = await window.projectGuardClerkReady;
-        if (!clerk.isSignedIn) {
+        const token = await getSettledSessionToken(clerk);
+        if (!token) {
+            console.error('No active Clerk session token on portal origin:', {
+                origin: window.location.origin,
+                clerkStatus: clerk.status,
+                isSignedIn: clerk.isSignedIn,
+                hasSession: Boolean(clerk.session),
+            });
             showSessionError(
-                'You opened the portal without a signed-in session. Sign in to continue.',
+                'Clerk has no active session on this portal. Sign in again here. If you signed in on a different domain, that domain must be configured as a Clerk satellite.',
                 'Sign in',
                 () => {
                     const signInUrl = new URL(portalSignInPage(), window.location.href);
@@ -45,9 +71,6 @@ window.projectGuardSessionReady = (async () => {
             );
             return null;
         }
-
-        const token = await clerk.session?.getToken();
-        if (!token) throw new Error('Clerk did not provide a session token.');
 
         const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/me`, {
             headers: { Authorization: `Bearer ${token}` },

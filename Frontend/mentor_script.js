@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainTitle = document.getElementById('main-title');
     const mainSubtitle = document.getElementById('main-subtitle');
     const contentContainer = document.getElementById('content-container');
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
 
     const navItems = [navDashboard, navProjectList, navStudentList];
 
@@ -133,18 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `
                     <div class="project-card">
                         <div class="project-info">
-                            <h3 class="project-title" style="text-transform: capitalize;">${p.project_name}</h3>
-                            <div class="project-meta">
-                                <span><i class="ph ph-users"></i> ${p.team || 'Students'}</span>
-                                <span><i class="ph ph-calendar-blank"></i> ${p.year || 'N/A'}</span>
-                                <span><i class="ph ph-hash"></i> Group ${p.group_no || '--'}</span>
+                        <h3 class="project-title" style="text-transform: capitalize;">${escapeHtml(p.project_name)}</h3>
+                        <div class="project-meta">
+                            <span><i class="ph ph-users"></i> ${escapeHtml(p.team || 'Students')}</span>
+                            <span><i class="ph ph-calendar-blank"></i> ${escapeHtml(p.year || 'N/A')}</span>
+                            <span><i class="ph ph-hash"></i> Group ${escapeHtml(p.group_no || '--')}</span>
                             </div>
                         </div>
                         <div class="project-actions">
                             <span class="chip ${chipClass}"><i class="ph ${chipIcon}"></i> ${chipText}</span>
-                            <button class="icon-btn glass-btn" title="View Details">
-                                <i class="ph ph-caret-right"></i>
-                            </button>
+                            ${p.can_assign ? `<button class="btn-table-action" type="button" data-assign-project-id="${escapeHtml(p.id)}">Assign to me</button>` : `<span class="chip verified">${p.assigned_to_me ? 'Assigned to me' : 'Assigned'}</span>`}
                         </div>
                     </div>
                 `;
@@ -155,6 +156,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Attach listeners
         filterCheckboxes.forEach(cb => {
             cb.addEventListener('change', updateProjectDisplay);
+        });
+        gridContainer.addEventListener('click', async event => {
+            const button = event.target.closest('[data-assign-project-id]');
+            if (!button) return;
+            button.disabled = true;
+            try {
+                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(button.dataset.assignProjectId)}/assign`, { method: 'PATCH' });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'Could not assign project');
+                await renderProjectListUI();
+            } catch (error) {
+                alert(error.message || 'Could not assign project');
+                button.disabled = false;
+            }
         });
 
         // Initial render

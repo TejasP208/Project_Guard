@@ -3,20 +3,21 @@
 import json
 import re
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 
 from mentor_roster import mentor_key
 from models import GroupMessage, Mentor, MentorReview, MentorStudent, Student
+from project_access import roster_for_project_owners
 
 
 class MessageRequest(BaseModel):
-    role: Literal["mentor", "student"]
-    user: str
-    group_id: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    group_id: str = Field(min_length=1, max_length=200)
     text: str = Field(default="", max_length=4000)
     meet_link: str = Field(default="", max_length=200)
 
@@ -32,15 +33,18 @@ def assigned_rooms(db, role, user):
         if not account:
             raise HTTPException(404, "Mentor account not found.")
         roster = db.query(MentorStudent).filter(MentorStudent.mentor_key == mentor_key(account.username)).all()
+        roster = roster_for_project_owners(db, roster)
         name = account.username
     else:
         account = db.query(Student).filter(func.lower(Student.roll_no) == user.lower()).first()
         if not account:
             raise HTTPException(404, "Student account not found.")
         assignments = db.query(MentorStudent).filter(func.lower(MentorStudent.prn) == user.lower()).all()
+        assignments = roster_for_project_owners(db, assignments)
         allowed = {room_id(row.mentor_key, row.group_name) for row in assignments if row.group_name and row.group_name.strip()}
         keys = {row.mentor_key for row in assignments}
         roster = db.query(MentorStudent).filter(MentorStudent.mentor_key.in_(keys)).all() if keys else []
+        roster = roster_for_project_owners(db, roster)
         roster = [row for row in roster if row.group_name and room_id(row.mentor_key, row.group_name) in allowed]
         name = assignments[0].student_name if assignments else account.roll_no
     groups = {}
@@ -83,14 +87,14 @@ def create_router(session_factory):
     router = APIRouter(prefix="/group-connect")
 
     @router.get("/groups")
-    def get_groups(request: Request, role: Literal["mentor", "student"] | None = None, user: str | None = None):
+    def get_groups(request: Request):
         role, user = verified_identity(request)
         with session_factory() as db:
             groups, _, _ = assigned_rooms(db, role, user)
-            return groups
+            return [{key: value for key, value in group.items() if key != "mentor_key"} for group in groups]
 
     @router.get("/messages")
-    def get_messages(request: Request, group_id: str, role: Literal["mentor", "student"] | None = None, user: str | None = None):
+    def get_messages(request: Request, group_id: Annotated[str, Query(min_length=1, max_length=200)]):
         role, user = verified_identity(request)
         with session_factory() as db:
             groups, _, _ = assigned_rooms(db, role, user)
@@ -99,7 +103,7 @@ def create_router(session_factory):
             # Bound response size while keeping the most recent conversation in order.
             messages = db.query(GroupMessage).filter(GroupMessage.room_id == group_id).order_by(
                 GroupMessage.id.desc()).limit(200).all()
-            return [message_payload(message) for message in reversed(messages)]
+            return [message_payload(message, role, user) for message in reversed(messages)]
 
     @router.post("/messages", status_code=201)
     def send_message(data: MessageRequest, request: Request):
@@ -122,12 +126,13 @@ def create_router(session_factory):
             db.add(message)
             db.commit()
             db.refresh(message)
-            return message_payload(message)
+            return message_payload(message, role, user)
 
     return router
 
 
-def message_payload(message):
-    return {"id": message.id, "role": message.sender_role, "user": message.sender_user,
+def message_payload(message, role, user):
+    return {"id": message.id, "role": message.sender_role,
+            "is_own": message.sender_role == role and message.sender_user.strip().casefold() == user.strip().casefold(),
             "name": message.sender_name, "text": message.text,
             "meet_link": message.meet_link, "created_at": message.created_at}

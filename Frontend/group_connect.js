@@ -21,8 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[character]);
-    const identity = () => ({role, user});
-    const query = params => new URLSearchParams({...identity(), ...params});
+    const query = params => new URLSearchParams(params);
     const controls = [...view.querySelectorAll('#group-chat-form input, #group-chat-form button, .chat-room-actions button')];
 
     async function request(path, options) {
@@ -67,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const firstRender = messageSignature === null;
         messageSignature = signature;
         stream.innerHTML = messages.length ? messages.map(message => {
-            const own = message.role === role && message.user.toLowerCase() === user.trim().toLowerCase();
+            const own = message.is_own;
             const time = new Date(message.created_at).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
             return `<div class="chat-bubble ${own ? 'own' : 'other'}">
                 <span class="sender-label">${escape(own ? 'You' : message.name)} (${escape(message.role)})</span>
@@ -83,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (loading) return;
         loading = true;
         try {
-            groups = await request(`/groups?${query({})}`);
+            groups = await request('/groups');
             if (!groups.some(group => group.id === selectedId)) {
                 selectedId = groups[0]?.id || null;
                 messageSignature = null;
@@ -112,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await request('/messages', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({...identity(), group_id: room, text, meet_link: meetLink})
+                body: JSON.stringify({group_id: room, text, meet_link: meetLink})
             });
             if (room === selectedId) input.value = '';
             await loadMessages();

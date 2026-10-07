@@ -47,6 +47,18 @@ def migrate_database():
         if "project_name" not in roster_columns:
             with engine.begin() as connection:
                 connection.exec_driver_sql("ALTER TABLE mentor_students ADD COLUMN project_name VARCHAR")
+    if inspect(engine).has_table("teams"):
+        team_columns = {column["name"] for column in inspect(engine).get_columns("teams")}
+        if "created_by_student_id" not in team_columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "ALTER TABLE teams ADD COLUMN created_by_student_id INTEGER "
+                    "REFERENCES students(id) ON DELETE SET NULL"
+                )
+                connection.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS ix_teams_created_by_student_id "
+                    "ON teams (created_by_student_id)"
+                )
     if not inspect(engine).has_table("projects"):
         return
     project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
@@ -57,6 +69,31 @@ def migrate_database():
             connection.exec_driver_sql(
                 "ALTER TABLE projects ADD COLUMN embedding vector(1024)"
             )
+        if "team_id" not in project_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN team_id INTEGER "
+                "REFERENCES teams(id) ON DELETE SET NULL"
+            )
+        if "submitted_by_student_id" not in project_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN submitted_by_student_id INTEGER "
+                "REFERENCES students(id) ON DELETE SET NULL"
+            )
+        if "assigned_mentor_id" not in project_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN assigned_mentor_id INTEGER "
+                "REFERENCES mentors(id) ON DELETE SET NULL"
+            )
+        if "mentor_assigned_at" not in project_columns:
+            connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN mentor_assigned_at VARCHAR")
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_team_id "
+            "ON projects (team_id) WHERE team_id IS NOT NULL"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_projects_assigned_mentor_id "
+            "ON projects (assigned_mentor_id)"
+        )
 
 
 def enable_pgvector():

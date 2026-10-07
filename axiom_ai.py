@@ -26,7 +26,7 @@ def _get_async_groq_client() -> AsyncGroq:
     global _async_groq_client
     api_key = _get_api_key()
     if _async_groq_client is None:
-        _async_groq_client = AsyncGroq(api_key=api_key)
+        _async_groq_client = AsyncGroq(api_key=api_key, timeout=45.0, max_retries=0)
     return _async_groq_client
 
 

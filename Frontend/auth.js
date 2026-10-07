@@ -19,6 +19,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const destination = isMentor ? 'mentor_index.html' : 'index.html';
     const returnTo = new URLSearchParams(window.location.search).get('redirect_url');
     const targetPage = returnTo === destination ? returnTo : destination;
+    let completingEnrollment = false;
+    let currentSignupPassword = null;
+    const showEnrollment = () => {
+        completingEnrollment = true;
+        loginForm.style.display = 'none';
+        signupForm.style.display = 'block';
+        authTitle.textContent = 'Complete enrollment';
+        authSubtitle.textContent = 'Correct your enrollment details. Leave password blank to keep it, or enter a new password.';
+        document.getElementById('current-password-group').hidden = false;
+        for (const id of ['signup-pass', 'confirm-pass']) {
+            const input = document.getElementById(id);
+            input.required = false;
+            input.closest('.form-group').style.display = '';
+            input.value = '';
+        }
+        signupForm.querySelector('button[type=submit] span').textContent = 'Complete enrollment';
+    };
     const expectedRole = isMentor ? 'mentor' : 'student';
     const showAuthError = (form, message) => {
         let error = form.querySelector('[role="alert"]');
@@ -74,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!response.ok) {
             const error = new Error(profile.detail || 'Could not verify your Project Guard profile.');
             error.status = response.status;
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401 || (response.status === 403 && isMentor)) {
                 await clerk.signOut();
             }
             throw error;
@@ -135,7 +152,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         const clerk = await window.projectGuardClerkReady;
-        if (clerk.isSignedIn) {
+        const sessionNotice = document.createElement('p');
+        sessionNotice.className = 'active-session-notice';
+        sessionNotice.setAttribute('role', 'status');
+        const sessionLabel = document.createElement('span');
+        const switchAccount = document.createElement('button');
+        switchAccount.type = 'button';
+        switchAccount.textContent = 'Logout';
+        switchAccount.className = 'session-logout';
+        switchAccount.addEventListener('click', async () => {
+            switchAccount.disabled = true;
+            try {
+                await clerk.signOut();
+                window.location.reload();
+            } catch (error) {
+                showAuthError(signupForm, clerkErrorMessage(error));
+                switchAccount.disabled = false;
+            }
+        });
+        sessionNotice.append(sessionLabel, switchAccount);
+        loginForm.insertBefore(sessionNotice, loginForm.querySelector('.auth-switch'));
+        const updateSessionNotice = () => {
+            sessionNotice.hidden = !clerk.session;
+            sessionLabel.textContent = 'You have an active session. Log out to use another account.';
+        };
+        updateSessionNotice();
+        if (clerk.session) {
             try {
                 await requirePortalRole(clerk, await getLinkedProfile(clerk));
                 window.location.replace(targetPage);
@@ -143,6 +185,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (error) {
                 if (error.portalRoleMismatch) {
                     showAuthError(loginForm, error.message);
+                } else if (error.status === 403 && !isMentor && clerk.session) {
+                    showEnrollment();
                 } else if (error.status === 401 || error.status === 403) {
                     showAuthError(loginForm, error.message);
                 } else {
@@ -177,7 +221,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await requirePortalRole(clerk, await getLinkedProfile(clerk));
                 window.location.assign(targetPage);
             } catch (error) {
-                if (error.portalRoleMismatch) {
+                if (error.status === 403 && !isMentor && clerk.session) {
+                    showEnrollment();
+                } else if (error.portalRoleMismatch) {
                     showAuthError(loginForm, error.message);
                 } else {
                     showAuthError(loginForm, clerkErrorMessage(error));
@@ -201,7 +247,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ? document.getElementById('signup-id').value.trim()
                     : document.getElementById('roll-1').value.trim();
                 const studentYear = isMentor ? null : document.getElementById('year').value.trim();
-                const attempt = await clerk.client.signUp.create({ username, password });
+                updateSessionNotice();
+                if (clerk.session && clerk.user?.username && clerk.user.username.toLowerCase() !== username.toLowerCase()) {
+                    throw new Error('You have an active session for another account. Open Login and click Logout before creating this account.');
+                }
+                const recoveringSession = Boolean(clerk.session);
+                const attempt = recoveringSession
+                    ? { status: 'complete' }
+                    : await clerk.client.signUp.create({ username, password });
                 if (attempt.status !== 'complete') {
                     const missingFields = attempt.missingFields?.length
                         ? formatClerkFields(attempt.missingFields)
@@ -216,21 +269,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ? `Clerk sign-up is not complete: ${missing}. This form collects a username and password only. To keep it that way, make email optional in this Clerk application's sign-up requirements.`
                         : `Clerk sign-up needs another step (${attempt.status}).`);
                 }
-                await clerk.setActive({ session: attempt.createdSessionId });
+                if (attempt.createdSessionId) {
+                    await clerk.setActive({ session: attempt.createdSessionId });
+                    currentSignupPassword = password;
+                }
+                updateSessionNotice();
+                if (recoveringSession && password && !isMentor) {
+                    const currentPassword = document.getElementById('enrollment-current-password').value || currentSignupPassword;
+                    if (clerk.user.hasPassword && !currentPassword) throw new Error('Enter your current password to choose a new password.');
+                    await clerk.user.updatePassword({ newPassword: password, ...(currentPassword ? { currentPassword } : {}) });
+                    currentSignupPassword = password;
+                    document.getElementById('enrollment-current-password').value = '';
+                }
                 await linkProfileToPostgres(clerk, isMentor
                     ? { role: 'mentor', mentor_name: username }
-                    : { role: 'student', roll_no: username, year: studentYear });
+                    : { role: 'student', roll_no: username, year: studentYear, enrollment_code: document.getElementById('enrollment-code').value.trim() });
                 window.location.assign(targetPage);
             } catch (error) {
+                updateSessionNotice();
                 const detail = clerkErrorMessage(error);
                 const profileConflict = error.status === 409 && /PostgreSQL|already linked|already exists/i.test(detail);
-                if (clerk.isSignedIn) {
+                if (clerk.session && isMentor) {
                     try {
                         await clerk.signOut();
                     } catch (signOutError) {
                         console.error('Could not clear the incomplete signup session:', signOutError);
                     }
                 }
+                if (!isMentor && clerk.session) showEnrollment();
                 showAuthError(signupForm, profileConflict
                     ? `${detail} If this is your existing test account, ask an administrator to link the PostgreSQL profile to your Clerk user. For a stale test-only profile, an administrator must confirm and remove the row before you retry.`
                     : detail);
@@ -239,13 +305,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     } catch (error) {
         console.error('Could not initialize Clerk:', error);
-        authSubtitle.textContent = 'Sign-in is temporarily unavailable. Please refresh and try again.';
+        authSubtitle.textContent = 'Sign-in could not finish loading. Refresh the page to retry.';
+        const detail = error?.message || 'Unknown Clerk initialization error.';
         for (const form of [loginForm, signupForm]) {
             setBusy(form, false);
             form.querySelectorAll('button[type="submit"]').forEach((button) => {
                 button.disabled = true;
             });
-            showAuthError(form, 'Could not connect to Clerk. Check that the FastAPI server is running and refresh this page.');
+            showAuthError(form, `Sign-in initialization failed: ${detail}`);
         }
     }
 });

@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="group_connect.css">
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=clerk-token-2"></script>
-    <script src="portal-session-guard.js?v=clerk-guard-6"></script>
+    <script src="portal-session-guard.js?v=clerk-guard-7"></script>
 </head>
 
 <body>
@@ -565,7 +565,7 @@
                         <label for="profile-pic-input" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                             <i class="ph ph-upload-simple"></i> Upload Photo
                         </label>
-                        <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                                    <input type="file" id="profile-pic-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;">
                         <button type="button" class="btn btn-secondary" id="btn-remove-photo" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
                             <i class="ph ph-trash"></i> Reset Icon
                         </button>
@@ -585,9 +585,9 @@
         </div>
     </div>
 
-    <script src="script.js?v=account-actions-1"></script>
+    <script src="script.js?v=project-visibility-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
-    <script src="group_connect.js"></script>
+    <script src="group_connect.js?v=project-visibility-1"></script>
 </body>
 
 </html>

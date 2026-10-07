@@ -47,7 +47,15 @@ window.projectGuardClerkReady = (async () => {
     await loadScript(`https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, {
         "data-clerk-publishable-key": publishableKey,
     });
-    await window.Clerk.load();
+    const loadOptions = {};
+    if (document.body.dataset.clerkUi === 'true') {
+        await loadScript(`https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`);
+        if (!window.__internal_ClerkUICtor) {
+            throw new Error('Clerk sign-in components could not initialize. Refresh and retry.');
+        }
+        loadOptions.ui = { ClerkUI: window.__internal_ClerkUICtor };
+    }
+    await window.Clerk.load(loadOptions);
 
     // Attach the active Clerk session to every frontend request sent through
     // this helper. Local API URLs are rewritten to the configured API origin.

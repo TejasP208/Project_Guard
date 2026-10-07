@@ -4,9 +4,17 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
 
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet',   quiet=True)
-nltk.download('omw-1.4',   quiet=True)
+# Install corpora during the backend build; request workers must not download them.
+for resource in ('stopwords', 'wordnet', 'omw-1.4'):
+    try:
+        nltk.data.find(f'corpora/{resource}')
+    except LookupError:
+        try:
+            nltk.data.find(f'corpora/{resource}.zip')
+        except LookupError:
+            raise RuntimeError(
+                'Missing NLTK resources. Run: python -m nltk.downloader stopwords wordnet omw-1.4'
+            ) from None
 
 # Build stopword set once at module load (fast lookup)
 _stop_words  = set(stopwords.words('english'))

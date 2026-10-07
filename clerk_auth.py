@@ -14,7 +14,8 @@ def _authorized_parties() -> list[str]:
         if _is_production_environment():
             for party in parties:
                 parsed = urlsplit(party)
-                if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+                if (parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment
+                        or "*" in party or parsed.username or parsed.password):
                     raise HTTPException(
                         status_code=503,
                         detail="CLERK_AUTHORIZED_PARTIES must contain exact HTTPS frontend origins.",

@@ -2057,3 +2057,23 @@ input[type="password"]:focus {
     text-align: center;
     color: var(--text-muted);
 }
+
+.active-session-notice {
+    color: #dc2626;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 12px 0;
+}
+.session-logout {
+    display: inline-block;
+    width: auto;
+    padding: 4px 10px;
+    margin-left: 8px;
+    border: 1px solid #dc2626;
+    border-radius: 6px;
+    background: transparent;
+    color: #dc2626;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.session-logout:disabled { opacity: 0.6; cursor: wait; }

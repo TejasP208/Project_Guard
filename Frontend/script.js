@@ -3,16 +3,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Profile Display & Edit Logic --- //
     const activeUser = window.projectGuardProfile?.identifier;
     let customStudentName = localStorage.getItem('studentName') || activeUser || 'Student';
-    let customStudentPic = localStorage.getItem('studentPic') || null;
+    const isSafeAvatarDataUrl = value => typeof value === 'string'
+        && value.length <= 1_500_000
+        && /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+    const storedStudentPic = localStorage.getItem('studentPic');
+    let customStudentPic = isSafeAvatarDataUrl(storedStudentPic) ? storedStudentPic : null;
 
     function updateStudentAvatar(picUrl) {
         const sidebarAvatar = document.getElementById('sidebar-avatar');
         const previewAvatar = document.getElementById('profile-modal-preview');
-        const content = picUrl 
-            ? `<img src="${picUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` 
-            : `<i class="ph-fill ph-user"></i>`;
-        if (sidebarAvatar) sidebarAvatar.innerHTML = content;
-        if (previewAvatar) previewAvatar.innerHTML = content;
+        const safePic = isSafeAvatarDataUrl(picUrl) ? picUrl : null;
+        for (const avatar of [sidebarAvatar, previewAvatar]) {
+            if (!avatar) continue;
+            avatar.replaceChildren();
+            if (safePic) {
+                const image = document.createElement('img');
+                image.src = safePic;
+                image.alt = '';
+                image.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+                avatar.append(image);
+            } else {
+                const icon = document.createElement('i');
+                icon.className = 'ph-fill ph-user';
+                avatar.append(icon);
+            }
+        }
     }
 
     const studentNameEl = document.getElementById('student-display-name');
@@ -59,9 +74,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         picInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
+                if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
+                    picInput.value = '';
+                    window.alert('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.');
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    tempStudentPic = evt.target.result;
+                    tempStudentPic = isSafeAvatarDataUrl(evt.target.result) ? evt.target.result : null;
                     updateStudentAvatar(tempStudentPic);
                 };
                 reader.readAsDataURL(file);
@@ -83,7 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const newName = nameInput.value.trim();
             if (newName) {
                 localStorage.setItem('studentName', newName);
-                if (tempStudentPic) {
+                if (isSafeAvatarDataUrl(tempStudentPic)) {
                     localStorage.setItem('studentPic', tempStudentPic);
                 } else {
                     localStorage.removeItem('studentPic');
@@ -114,7 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!activeUser) return;
         const list = document.getElementById('team-invitations-list');
         try {
-            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations?roll_no=${encodeURIComponent(activeUser)}`);
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations`);
             const invitations = await response.json();
             if (!response.ok) throw new Error(invitations.detail || 'Could not load invitations.');
             document.querySelectorAll('.notification-badge').forEach(badge => {
@@ -131,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="team-invitation-icon"><i class="ph ph-users-three"></i></div>
                     <div class="team-invitation-copy">
                         <strong>${escapeInviteHtml(invitation.team_name)}</strong>
-                        <span>Invited by ${escapeInviteHtml(invitation.inviter_roll_no)} · Code ${escapeInviteHtml(invitation.team_code)}</span>
+                        <span>Invited by ${escapeInviteHtml(invitation.inviter_roll_no)}</span>
                     </div>
                     <div class="team-invitation-actions">
                         <button class="btn btn-secondary btn-sm" type="button" data-invite-action="decline">Decline</button>
@@ -170,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inviter_roll_no: activeUser, invitee_roll_no: invitee })
+                body: JSON.stringify({ invitee_roll_no: invitee })
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not send invitation.');
@@ -193,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/team-invitations/${item.dataset.invitationId}`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ roll_no: activeUser, action: button.dataset.inviteAction })
+                body: JSON.stringify({ action: button.dataset.inviteAction })
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not respond to invitation.');
@@ -210,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function fetchStudentTeam(rollNo) {
         try {
-            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team?roll_no=${encodeURIComponent(rollNo)}`);
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team`);
             const data = await response.json();
             if (response.ok && data.has_team) {
                 renderTeamUI(data.team_name, data.team_code, data.members, rollNo);
@@ -232,10 +252,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Render all current members dynamically
         if (rosterMembers && members) {
+            const escapeTeamHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[character]);
             rosterMembers.innerHTML = ''; 
             members.forEach((member, index) => {
                 const isLeader = (index === 0) ? '<span class="leader-badge"><i class="ph-fill ph-crown"></i></span>' : '';
-                const labelText = (member === rollNo) ? "You (" + member + ")" : member;
+                const labelText = (member === rollNo) ? `You (${escapeTeamHtml(member)})` : escapeTeamHtml(member);
                 const leaderClass = (index === 0) ? 'leader' : '';
                 
                 rosterMembers.innerHTML += `
@@ -642,8 +665,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     body: JSON.stringify({
                         team_name: teamName,
                         description: description,
-                        max_members: parseInt(maxMembers),
-                        roll_no: rollNo
+                        max_members: parseInt(maxMembers)
                     })
                 });
 
@@ -682,8 +704,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        team_code: teamCode,
-                        roll_no: rollNo
+                        team_code: teamCode
                     })
                 });
 
@@ -764,9 +785,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/leave-team`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roll_no: activeUser })
+                    method: 'POST'
                 });
                 const data = await res.json();
 
@@ -915,7 +934,6 @@ async function submitProject() {
     }
 
     const data = {
-        roll_no: rollNo,
         project_name: titleEl.value.trim(),
         project_abstract: descEl ? descEl.value.trim() : ""
     };

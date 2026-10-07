@@ -8,12 +8,12 @@ Every API route that returns or changes application data must require authentica
 
 ## Implementation plan
 
-- [ ] **Connect the app to Clerk**
+- [x] **Connect the app to Clerk**
    - Use the Clerk application and keys already configured in `.env`.
    - Use the publishable key in the frontend.
    - Keep the Clerk secret key on the backend only; never expose or commit it.
 
-- [ ] **Replace the current authentication flows**
+- [x] **Replace the current authentication flows**
    - Integrate Clerk's JavaScript SDK for sign-up, sign-in, and sign-out.
    - Use the same Clerk application for students and mentors.
    - Preserve the separate student and mentor portal interfaces.
@@ -68,6 +68,8 @@ Every API route that returns or changes application data must require authentica
 - No API route that exposes application data will remain public.
 
 ## Authentication issue review (2026-10-04)
+
+The completed implementation items were cross-checked against the current frontend and FastAPI source on 2026-10-06. Production configuration and the verification items below remain open until tested across the listed browsers and deployment origins.
 
 - [x] Add password-manager autocomplete hints and prevent password managers from treating confirmation as a second password field.
 - [x] Add accessible show/hide controls to student and mentor password fields.

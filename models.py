@@ -1,5 +1,5 @@
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -30,6 +30,20 @@ class Student(Base):
     year: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class EnrollmentCode(Base):
+    __tablename__ = "enrollment_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    roll_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    year: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    used_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    used_by_clerk_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    revoked_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -39,6 +53,16 @@ class Project(Base):
     project_name: Mapped[str | None] = mapped_column(String, nullable=True)
     project_abstract: Mapped[str | None] = mapped_column(String, nullable=True)
     team_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
+    )
+    submitted_by_student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("students.id", ondelete="SET NULL"), nullable=True
+    )
+    assigned_mentor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mentors.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    mentor_assigned_at: Mapped[str | None] = mapped_column(String, nullable=True)
     # Cloudflare Qwen3 embeddings are 1024-dimensional and nullable until indexed.
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(1024), nullable=True)
 
@@ -93,6 +117,9 @@ class Team(Base):
     team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     max_members: Mapped[int | None] = mapped_column(Integer, default=4, nullable=True)
+    created_by_student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("students.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class TeamMember(Base):
@@ -113,3 +140,14 @@ class TeamInvitation(Base):
     status: Mapped[str] = mapped_column(String, index=True, nullable=False, default="pending")
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     responded_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ApiRateLimitBucket(Base):
+    """Shared fixed-window counters, stored in PostgreSQL across API workers."""
+
+    __tablename__ = "api_rate_limit_buckets"
+
+    bucket_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    window_start: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)

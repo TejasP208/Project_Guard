@@ -62,6 +62,7 @@ Leave this terminal running too. You can stop either server with `Control+C` in 
 - Mentor sign in/sign up: [http://127.0.0.1:5500/mentor_auth.html](http://127.0.0.1:5500/mentor_auth.html)
 - Mentor portal: [http://127.0.0.1:5500/mentor_index.html](http://127.0.0.1:5500/mentor_index.html)
 - Backend API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Admin portal: [http://127.0.0.1:5500/admin.html](http://127.0.0.1:5500/admin.html)
 
 Open the sign-in pages first. The dashboard pages redirect to the corresponding sign-in page if the browser has no saved login.
 

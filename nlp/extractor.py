@@ -124,7 +124,7 @@ def extract_from_docx(file_bytes: bytes) -> str:
     except DocumentLimitError:
         raise
     except Exception as exc:  # Parser exceptions vary across python-docx/lxml versions.
-        logger.warning("DOCX extraction failed: %s", type(exc).__name__, exc_info=True)
+        logger.warning("DOCX extraction failed (%s)", type(exc).__name__)
         raise DocumentExtractionError(
             "This DOCX file is invalid or unreadable. Try saving it again and re-uploading it."
         ) from exc
@@ -140,7 +140,7 @@ def extract_from_txt(file_bytes: bytes) -> str:
     try:
         decoded = file_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
-        logger.warning("TXT decoding failed: %s", type(exc).__name__, exc_info=True)
+        logger.warning("TXT decoding failed (%s)", type(exc).__name__)
         raise DocumentExtractionError(
             "This TXT file could not be read as UTF-8 text. Save it as UTF-8 and upload it again."
         ) from exc

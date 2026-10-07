@@ -12,10 +12,10 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="mentor_sytle.css?v=account-actions-2">
     <link rel="stylesheet" href="group_connect.css">
-    <script src="group_connect.js" defer></script>
+    <script src="group_connect.js?v=project-visibility-1" defer></script>
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=clerk-token-2"></script>
-    <script src="portal-session-guard.js?v=clerk-guard-6"></script>
+    <script src="portal-session-guard.js?v=clerk-guard-7"></script>
 </head>
 <body data-portal="mentor">
     <div class="app-container">
@@ -421,7 +421,7 @@
                         <label for="profile-pic-input" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                             <i class="ph ph-upload-simple"></i> Upload Photo
                         </label>
-                        <input type="file" id="profile-pic-input" accept="image/*" style="display: none;">
+                        <input type="file" id="profile-pic-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;">
                         <button type="button" class="btn btn-secondary" id="btn-remove-photo" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
                             <i class="ph ph-trash"></i> Reset Icon
                         </button>
@@ -475,16 +475,31 @@
         if (!mentorUser) return;
         // Profile display setup
         let customMentorName = localStorage.getItem('mentorName') || mentorUser;
-        let customMentorPic = localStorage.getItem('mentorPic') || null;
+        const isSafeAvatarDataUrl = value => typeof value === 'string'
+            && value.length <= 1_500_000
+            && /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+        const storedMentorPic = localStorage.getItem('mentorPic');
+        let customMentorPic = isSafeAvatarDataUrl(storedMentorPic) ? storedMentorPic : null;
 
         function updateAvatarElements(picUrl) {
             const sidebarAvatar = document.getElementById('sidebar-avatar');
             const previewAvatar = document.getElementById('profile-modal-preview');
-            const content = picUrl 
-                ? `<img src="${picUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` 
-                : `<i class="ph-fill ph-user"></i>`;
-            if (sidebarAvatar) sidebarAvatar.innerHTML = content;
-            if (previewAvatar) previewAvatar.innerHTML = content;
+            const safePic = isSafeAvatarDataUrl(picUrl) ? picUrl : null;
+            for (const avatar of [sidebarAvatar, previewAvatar]) {
+                if (!avatar) continue;
+                avatar.replaceChildren();
+                if (safePic) {
+                    const image = document.createElement('img');
+                    image.src = safePic;
+                    image.alt = '';
+                    image.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+                    avatar.append(image);
+                } else {
+                    const icon = document.createElement('i');
+                    icon.className = 'ph-fill ph-user';
+                    avatar.append(icon);
+                }
+            }
         }
 
         const nameEl = document.getElementById('mentor-display-name');
@@ -521,9 +536,14 @@
             picInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
+                    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
+                        picInput.value = '';
+                        window.alert('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.');
+                        return;
+                    }
                     const reader = new FileReader();
                     reader.onload = (evt) => {
-                        tempPic = evt.target.result;
+                        tempPic = isSafeAvatarDataUrl(evt.target.result) ? evt.target.result : null;
                         updateAvatarElements(tempPic);
                     };
                     reader.readAsDataURL(file);
@@ -545,7 +565,7 @@
                 const newName = nameInput.value.trim();
                 if (newName) {
                     localStorage.setItem('mentorName', newName);
-                    if (tempPic) {
+                    if (isSafeAvatarDataUrl(tempPic)) {
                         localStorage.setItem('mentorPic', tempPic);
                     } else {
                         localStorage.removeItem('mentorPic');
@@ -617,7 +637,7 @@
             // ============================================
             let projectCatalog = new Map();
             async function loadProjects() {
-                const tbody = document.querySelector('#view-project-list .mentor-table tbody');
+                    const tbody = document.querySelector('#view-project-list .mentor-table tbody');
                 if (!tbody) return;
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading projects...</td></tr>';
 
@@ -639,10 +659,25 @@
                             <td>${escapeHtml(p.team || 'N/A')}</td>
                             <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Submitted</span></td>
                             <td>${escapeHtml(p.year || 'N/A')}</td>
-                            <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
+                            <td>${p.can_assign ? '<button class="btn-table-action" type="button" data-assign-project-id="' + escapeHtml(p.id) + '">Assign to me</button>' : '<span class="chip verified">' + (p.assigned_to_me ? 'Assigned to me' : 'Assigned') + '</span>'}</td>
                             <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(p.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
                         </tr>
                     `).join('');
+
+                    tbody.querySelectorAll('[data-assign-project-id]').forEach(button => {
+                        button.addEventListener('click', async () => {
+                            button.disabled = true;
+                            try {
+                                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(button.dataset.assignProjectId)}/assign`, { method: 'PATCH' });
+                                const result = await response.json();
+                                if (!response.ok) throw new Error(result.detail || 'Could not assign project');
+                                await Promise.all([loadProjects(), loadStudents(), loadAssignedGroups(), loadDashboard()]);
+                            } catch (error) {
+                                alert(error.message || 'Could not assign project');
+                                button.disabled = false;
+                            }
+                        });
+                    });
 
                 } catch (error) {
                     console.error('Error loading projects:', error);
@@ -733,10 +768,7 @@
                         signal: axiomRequestController.signal,
                         body: JSON.stringify({
                             question,
-                            project_title: selectedAxiomProject.project_name || 'Untitled project',
-                            project_abstract: selectedAxiomProject.project_abstract || '',
-                            group_name: String(selectedAxiomProject.group_no || ''),
-                            year: selectedAxiomProject.year || '',
+                            project_id: selectedAxiomProject.id,
                             history: axiomHistory.slice(-8)
                         })
                     });
@@ -780,7 +812,7 @@
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading students...</td></tr>';
 
                 try {
-                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students`);
                     if (!response.ok) throw new Error('Failed to fetch');
                     const students = await response.json();
                     rosterStudents = students;
@@ -912,7 +944,7 @@
                 if (!confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`)) return;
                 button.disabled = true;
                 try {
-                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/${student.id}?mentor_user=${encodeURIComponent(mentorUser)}`, { method: 'DELETE' });
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/${student.id}`, { method: 'DELETE' });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.detail || 'Could not delete student.');
                     document.getElementById('student-list-feedback').textContent = `${student.student_name} was removed from your roster.`;
@@ -932,40 +964,24 @@
                 if (rosterMode !== 'create' && rosterMode !== 'edit') return;
                 rosterSave.disabled = true;
                 rosterError.textContent = '';
-                const data = { mentor_user: mentorUser };
+                const data = {};
                 Object.entries(rosterFields).forEach(([key, field]) => { data[key] = field.value.trim(); });
                 try {
                     const isCreate = rosterMode === 'create';
                     const url = isCreate
                         ? `${window.projectGuardApiBaseUrl}/mentor/students`
                         : `${window.projectGuardApiBaseUrl}/mentor/students/${selectedRosterId}`;
-                    let response = await window.projectGuardApiFetch(url, {
+                    const response = await window.projectGuardApiFetch(url, {
                         method: isCreate ? 'POST' : 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
-                    let result = await response.json();
-                    if (isCreate && response.status === 409 && result.detail?.code === 'PRN_ASSIGNED') {
-                        const existing = result.detail;
-                        const currentGroup = existing.group_number ? `Group ${existing.group_number}` : 'no group';
-                        const newGroup = data.group_number ? `Group ${data.group_number}` : 'no group';
-                        const confirmed = window.confirm(
-                            `PRN ${data.prn} already belongs to ${existing.student_name} under ${existing.mentor_name} (${currentGroup}).\n\n` +
-                            `Move this student to ${mentorUser} (${newGroup}) and set the name to ${data.student_name}?`
-                        );
-                        if (!confirmed) return;
-                        response = await window.projectGuardApiFetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...data, transfer_existing: true })
-                        });
-                        result = await response.json();
-                    }
+                    const result = await response.json();
                     if (!response.ok) {
                         throw new Error(typeof result.detail === 'string' ? result.detail : `Could not ${isCreate ? 'add' : 'update'} student.`);
                     }
                     closeRosterModal();
-                    document.getElementById('student-list-feedback').textContent = `${data.student_name} was ${result.transferred ? 'moved to your roster' : isCreate ? 'added to your roster' : 'updated'}.`;
+                    document.getElementById('student-list-feedback').textContent = `${data.student_name} was ${isCreate ? 'added to your roster' : 'updated'}.`;
                     await Promise.all([loadStudents(), loadAssignedGroups()]);
                 } catch (error) {
                     rosterError.textContent = error.message;
@@ -1030,7 +1046,7 @@
             async function loadDashboard() {
                 const activity = document.getElementById('dashboard-activity');
                 try {
-                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/dashboard?mentor_user=${encodeURIComponent(mentorUser)}`);
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/dashboard`);
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.detail || 'Could not load dashboard.');
                     document.getElementById('dashboard-students').textContent = data.assigned_students;
@@ -1072,7 +1088,7 @@
                 try {
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/reviews/${item.dataset.reviewId}`, {
                         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ mentor_user: mentorUser, status: button.dataset.reviewAction })
+                        body: JSON.stringify({ status: button.dataset.reviewAction })
                     });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.detail || 'Could not update review.');
@@ -1095,7 +1111,6 @@
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/reviews`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            mentor_user: mentorUser,
                             group_number: document.getElementById('review-group').value,
                             review_type: document.getElementById('review-type').value,
                             review_date: document.getElementById('review-date').value,
@@ -1218,10 +1233,9 @@
                     const file = fileInput.files[0];
                     if (!file) return;
                     const form = new FormData();
-                    form.append('mentor_user', mentorUser);
                     form.append('file', file);
                     addStudentsBtn.disabled = true;
-                    setImportStatus('loading', 'Importing and syncing students...');
+                    setImportStatus('loading', 'Replacing this mentor roster from the uploaded sheet...');
                     try {
                         const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/import`, {
                             method: 'POST', body: form
@@ -1240,6 +1254,7 @@
                             successMsg = `Student roster is up to date for ${mentorUser}.`;
                         }
 
+                        if (result.removed > 0) successMsg += ` Removed ${result.removed} student${result.removed === 1 ? '' : 's'} missing from the uploaded sheet.`;
                         setImportStatus('success', successMsg);
                         fileInput.value = '';
                         filePreview.classList.add('hidden');
