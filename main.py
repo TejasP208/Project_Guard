@@ -29,7 +29,7 @@ from axiom_ai import Chatbot_stream
 from database import SessionLocal, enable_pgvector, engine, migrate_database
 from clerk_auth import require_clerk_user_id, validate_production_clerk_config
 from mentor_roster import mentor_key, parse_mentor_roster
-from enrollment import redeem_student
+from enrollment import redeem_student, redeem_mentor
 from models import ApiRateLimitBucket, Base, EnrollmentCode, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from enrollment import code_hash
 import secrets
@@ -299,24 +299,27 @@ def get_current_profile(request: Request):
 @app.delete("/api/account")
 def delete_current_account(request: Request):
     """Remove the caller's app profile and Clerk identity, preserving academic data."""
-    clerk_user_id = request.state.clerk_user_id
-    profile = request.state.profile
+    return delete_profile_account(request.state.clerk_user_id, request.state.profile)
+
+
+def delete_profile_account(clerk_user_id, profile):
     db = SessionLocal()
     try:
         if profile["role"] == "student":
-            account = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+            account = db.query(Student).filter(Student.id == profile["id"] if "id" in profile else Student.clerk_user_id == clerk_user_id).first()
         else:
-            account = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+            account = db.query(Mentor).filter(Mentor.id == profile["id"] if "id" in profile else Mentor.clerk_user_id == clerk_user_id).first()
         if not account:
             raise HTTPException(status_code=404, detail="Your application profile no longer exists.")
 
         secret_key = os.getenv("CLERK_SECRET_KEY", "").strip()
-        if not secret_key:
+        if clerk_user_id and not secret_key:
             raise HTTPException(status_code=503, detail="Clerk account deletion is not configured.")
 
         # Remove credentials first. Team, roster, invitation, review, and project
         # rows intentionally remain because they are not login-profile records.
-        Clerk(bearer_auth=secret_key).users.delete(user_id=clerk_user_id, timeout_ms=10_000)
+        if clerk_user_id:
+            Clerk(bearer_auth=secret_key).users.delete(user_id=clerk_user_id, timeout_ms=10_000)
         db.delete(account)
         db.commit()
         return {"message": "Account deleted.", "role": profile["role"]}
@@ -383,17 +386,9 @@ def link_clerk_profile(data: ClerkProfileLinkRequest, request: Request):
                 "mentor_name": linked_mentor.username,
             }
 
-        existing_mentor = db.query(Mentor).filter(
-            func.lower(Mentor.username) == mentor_name.lower()
-        ).first()
-        if existing_mentor:
-            message = "This mentor profile already exists in PostgreSQL. Existing accounts must be linked manually."
-            if existing_mentor.clerk_user_id:
-                message = "This mentor name is already linked to another Clerk user."
-            raise HTTPException(status_code=409, detail=message)
-
-        profile = Mentor(username=mentor_name, clerk_user_id=clerk_user_id)
-        db.add(profile)
+        if not data.enrollment_code:
+            raise HTTPException(422, "Mentor enrollment code is required.")
+        profile = redeem_mentor(db, clerk_user_id, mentor_name, data.enrollment_code)
         db.commit()
         return {
             "role": "mentor",
@@ -1565,8 +1560,9 @@ def require_enrollment_admin(request: Request):
 
 
 class AdminEnrollmentRequest(StrictRequest):
+    role: Literal["student", "mentor"] = "student"
     roll_no: str = Field(min_length=1, max_length=64)
-    year: str = Field(min_length=1, max_length=64)
+    year: str = Field(default="", max_length=64)
     expires_hours: int = Field(default=168, ge=1, le=8760)
 
 
@@ -1574,7 +1570,7 @@ class AdminEnrollmentRequest(StrictRequest):
 def list_enrollments(request: Request):
     require_enrollment_admin(request)
     with SessionLocal() as db:
-        return [{'id': row.id, 'roll_no': row.roll_no, 'year': row.year,
+        return [{'id': row.id, 'role': row.role, 'roll_no': row.roll_no, 'year': row.year,
                  'expires_at': row.expires_at, 'used_at': row.used_at, 'revoked_at': row.revoked_at}
                 for row in db.query(EnrollmentCode).order_by(EnrollmentCode.id.desc()).limit(200)]
 
@@ -1583,12 +1579,16 @@ def list_enrollments(request: Request):
 def issue_enrollment(data: AdminEnrollmentRequest, request: Request):
     require_enrollment_admin(request)
     with SessionLocal() as db:
-        profiles = db.query(Student).filter(func.lower(func.trim(Student.roll_no)) == data.roll_no.lower()).all()
+        identifier = data.roll_no.strip()
+        if not identifier or (data.role == "student" and not data.year.strip()):
+            raise HTTPException(422, "Identifier and student year must not be blank.")
+        model, field = (Student, Student.roll_no) if data.role == "student" else (Mentor, Mentor.username)
+        profiles = db.query(model).filter(func.lower(func.trim(field)) == identifier.lower()).all()
         if len(profiles) > 1 or any(row.clerk_user_id for row in profiles):
-            raise HTTPException(409, 'This roll number already has a linked or ambiguous profile.')
+            raise HTTPException(409, 'This identifier already has a linked or ambiguous profile.')
         code = secrets.token_urlsafe(24)
         now = int(time.time())
-        grant = EnrollmentCode(code_hash=code_hash(code), roll_no=data.roll_no, year=data.year,
+        grant = EnrollmentCode(role=data.role, code_hash=code_hash(code), roll_no=identifier, year=data.year.strip(),
                                created_at=now, expires_at=now + data.expires_hours * 3600)
         db.add(grant)
         db.commit()
@@ -1605,3 +1605,26 @@ def revoke_enrollment(enrollment_id: int, request: Request):
         grant.revoked_at = int(time.time())
         db.commit()
         return {'message': 'Enrollment revoked.'}
+
+
+@app.get('/api/admin/accounts')
+def list_admin_accounts(request: Request):
+    require_enrollment_admin(request)
+    with SessionLocal() as db:
+        return [{"id": row.id, "role": role, "identifier": getattr(row, field)}
+                for role, model, field in (("student", Student, "roll_no"), ("mentor", Mentor, "username"))
+                for row in db.query(model).order_by(model.id.desc()).limit(200)]
+
+
+@app.delete('/api/admin/accounts/{role}/{account_id}')
+def delete_admin_account(role: Literal["student", "mentor"], account_id: int, request: Request):
+    require_enrollment_admin(request)
+    with SessionLocal() as db:
+        model = Student if role == "student" else Mentor
+        account = db.query(model).filter(model.id == account_id).first()
+        if not account:
+            raise HTTPException(404, "Account not found.")
+        subject = account.clerk_user_id
+        if subject == request.state.clerk_user_id:
+            raise HTTPException(409, "Use account settings to delete your own account.")
+    return delete_profile_account(subject, {"role": role, "id": account_id})
