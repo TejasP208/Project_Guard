@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         authTitle.textContent = 'Complete enrollment';
         authSubtitle.textContent = 'Correct your enrollment details. Leave password blank to keep it, or enter a new password.';
         document.getElementById('current-password-group').hidden = false;
-        for (const id of ['signup-pass', 'confirm-pass']) {
+        for (const id of ['signup-pass', isMentor ? 'signup-confirm-pass' : 'confirm-pass']) {
             const input = document.getElementById(id);
             input.required = false;
             input.closest('.form-group').style.display = '';
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!response.ok) {
             const error = new Error(profile.detail || 'Could not verify your Project Guard profile.');
             error.status = response.status;
-            if (response.status === 401 || (response.status === 403 && isMentor)) {
+            if (response.status === 401) {
                 await clerk.signOut();
             }
             throw error;
@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (error) {
                 if (error.portalRoleMismatch) {
                     showAuthError(loginForm, error.message);
-                } else if (error.status === 403 && !isMentor && clerk.session) {
+                } else if (error.status === 403 && clerk.session) {
                     showEnrollment();
                 } else if (error.status === 401 || error.status === 403) {
                     showAuthError(loginForm, error.message);
@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await requirePortalRole(clerk, await getLinkedProfile(clerk));
                 window.location.assign(targetPage);
             } catch (error) {
-                if (error.status === 403 && !isMentor && clerk.session) {
+                if (error.status === 403 && clerk.session) {
                     showEnrollment();
                 } else if (error.portalRoleMismatch) {
                     showAuthError(loginForm, error.message);
@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     currentSignupPassword = password;
                 }
                 updateSessionNotice();
-                if (recoveringSession && password && !isMentor) {
+                if (recoveringSession && password) {
                     const currentPassword = document.getElementById('enrollment-current-password').value || currentSignupPassword;
                     if (clerk.user.hasPassword && !currentPassword) throw new Error('Enter your current password to choose a new password.');
                     await clerk.user.updatePassword({ newPassword: password, ...(currentPassword ? { currentPassword } : {}) });
@@ -282,21 +282,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById('enrollment-current-password').value = '';
                 }
                 await linkProfileToPostgres(clerk, isMentor
-                    ? { role: 'mentor', mentor_name: username }
+                    ? { role: 'mentor', mentor_name: username, enrollment_code: document.getElementById('enrollment-code').value.trim() }
                     : { role: 'student', roll_no: username, year: studentYear, enrollment_code: document.getElementById('enrollment-code').value.trim() });
                 window.location.assign(targetPage);
             } catch (error) {
                 updateSessionNotice();
                 const detail = clerkErrorMessage(error);
                 const profileConflict = error.status === 409 && /PostgreSQL|already linked|already exists/i.test(detail);
-                if (clerk.session && isMentor) {
-                    try {
-                        await clerk.signOut();
-                    } catch (signOutError) {
-                        console.error('Could not clear the incomplete signup session:', signOutError);
-                    }
-                }
-                if (!isMentor && clerk.session) showEnrollment();
+                if (clerk.session) showEnrollment();
                 showAuthError(signupForm, profileConflict
                     ? `${detail} If this is your existing test account, ask an administrator to link the PostgreSQL profile to your Clerk user. For a stale test-only profile, an administrator must confirm and remove the row before you retry.`
                     : detail);

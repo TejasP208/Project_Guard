@@ -12,7 +12,7 @@ function browser(hostname, configured = '') {
         Clerk: {load: async () => {}, session: {getToken: async () => 'fixture-session'}},
     };
     const context = vm.createContext({window, URL, Headers, Request, atob,
-        document: {createElement: () => ({setAttribute() {}}), head: {appendChild: script => queueMicrotask(() => script.onload())}},
+        document: {body: {dataset: {}}, createElement: () => ({setAttribute() {}}), head: {appendChild: script => queueMicrotask(() => script.onload())}},
         fetch: async (url, options) => {
             calls.push({url: String(url), options});
             return {ok: true, json: async () => ({clerk_publishable_key: 'pk_test_' + Buffer.from('fixture.clerk.accounts.dev$').toString('base64')})};

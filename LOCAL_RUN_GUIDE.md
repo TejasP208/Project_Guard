@@ -72,7 +72,7 @@ Open the sign-in pages first. The dashboard pages redirect to the corresponding 
 
 1. Open `http://127.0.0.1:5500/auth.html`.
 2. Select **Sign Up**.
-3. Enter a roll number, year, and password; confirm the password.
+3. Enter a roll number, year, administrator-issued enrollment code, and password; confirm the password.
 4. After account creation, return to **Login**.
 5. Sign in with the same roll number and password. The student dashboard opens.
 
@@ -80,11 +80,19 @@ Open the sign-in pages first. The dashboard pages redirect to the corresponding 
 
 1. Open `http://127.0.0.1:5500/mentor_auth.html`.
 2. Select **Sign Up**.
-3. Enter a mentor name and password; confirm the password.
+3. Enter a mentor name, administrator-issued mentor enrollment code, and password; confirm the password.
 4. After account creation, return to **Login**.
 5. Sign in with the same mentor name and password. The mentor dashboard opens.
 
-Accounts are stored in the configured PostgreSQL database; signup is required unless an account already exists in that database. Successful login is remembered in browser `localStorage`. Use **Logout** in the portal to clear that browser login.
+Clerk manages login credentials and sessions; PostgreSQL stores linked application profiles. Existing linked accounts can sign in without another enrollment code. New profiles require a matching, unused, unexpired enrollment code. Use **Logout** in the portal to end the Clerk session.
+
+### Administrator
+
+Set `ENROLLMENT_ADMIN_CLERK_USER_IDS` in the backend environment to a comma-separated list of authorized Clerk user IDs, then restart the backend. Sign in at `admin.html`. Use the Student portal and Mentor portal buttons at the top of the admin page to filter accounts and enrollment codes. The enrollment form issues codes for the selected portal. Student codes require a roll number and year; mentor codes require a mentor name. Copy the code when it is displayed and share it privately. Codes can be revoked before use.
+
+Under **Student and mentor accounts**, select **Delete account** and confirm to remove that account's Clerk login and application profile. Academic records remain. If Clerk deletion fails, the application profile remains so the administrator can retry. No real accounts are deleted by automated tests.
+
+For operators with backend access, mentor codes can also be issued with `python enrollment.py issue --role mentor --roll-no "Mentor Name"`. Student issuance uses `--role student --roll-no "ROLL" --year "YEAR"`.
 
 ## PostgreSQL and vector search
 

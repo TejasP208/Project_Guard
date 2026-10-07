@@ -34,6 +34,7 @@ class EnrollmentCode(Base):
     __tablename__ = "enrollment_codes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="student", server_default="student")
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     roll_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     year: Mapped[str] = mapped_column(String(64), nullable=False)

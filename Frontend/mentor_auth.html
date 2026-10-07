@@ -78,7 +78,8 @@
                         <button type="button" class="password-toggle" aria-label="Show password" aria-pressed="false" data-password-toggle="signup-confirm-pass"><i class="ph ph-eye" aria-hidden="true"></i></button>
                     </div>
                 </div>
-                <div id="clerk-captcha"></div>
+                <div class="form-group"><label for="enrollment-code">Mentor enrollment code</label><div class="input-wrapper"><input id="enrollment-code" type="text" autocomplete="off" required maxlength="128" placeholder="Code provided by your administrator"></div></div>
+                <div class="form-group" id="current-password-group" hidden><label for="enrollment-current-password">Current password (required to change it)</label><input type="password" id="enrollment-current-password" autocomplete="current-password"></div><div id="clerk-captcha"></div>
                 <button type="submit" class="btn btn-primary auth-btn">
                     <span>Create Account</span>
                     <i class="ph ph-user-plus"></i>
@@ -90,6 +91,6 @@
 
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=clerk-token-2"></script>
-    <script src="auth.js?v=session-notice-14"></script>
+    <script src="auth.js?v=mentor-enrollment-15"></script>
 </body>
 </html>

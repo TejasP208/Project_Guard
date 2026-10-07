@@ -26,6 +26,11 @@ SessionLocal = sessionmaker(bind=engine)
 
 def migrate_database():
     """Apply safe additive application-profile and vector migrations."""
+    if inspect(engine).has_table("enrollment_codes"):
+        columns = {column["name"] for column in inspect(engine).get_columns("enrollment_codes")}
+        if "role" not in columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql("ALTER TABLE enrollment_codes ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'student'")
     inspector = inspect(engine)
     for table_name in ("students", "mentors"):
         if not inspector.has_table(table_name):

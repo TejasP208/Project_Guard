@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 import main
 from legacy_projects import legacy_inventory, reconcile_projects
-from models import Base, Mentor, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
+from models import Base, EnrollmentCode, Mentor, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from mentor_roster import mentor_key
 
 
@@ -97,7 +97,12 @@ class ProjectVisibilityTests(unittest.TestCase):
     def test_pending_invitation_omits_join_code_and_profile_link_omits_subject(self):
         invitations = self.client.get("/team-invitations", headers=self.headers("student:S1")).json()
         self.assertEqual(set(invitations[0]), {"id", "team_name", "inviter_roll_no"})
-        response = self.client.post("/api/profile/link", headers=self.headers("student:new"), json={"role": "student", "roll_no": "NEW"})
+        import time
+        from enrollment import code_hash
+        with self.sessions() as db:
+            db.add(EnrollmentCode(code_hash=code_hash("fixture-code"), roll_no="NEW", year="Y1", created_at=int(time.time()), expires_at=int(time.time()) + 3600))
+            db.commit()
+        response = self.client.post("/api/profile/link", headers=self.headers("student:new"), json={"role": "student", "roll_no": "NEW", "year": "Y1", "enrollment_code": "fixture-code"})
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("clerk_user_id", response.json())
 
