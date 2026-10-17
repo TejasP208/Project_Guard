@@ -220,28 +220,26 @@ def public_config():
 
 def resolve_profile_for_clerk_user_id(clerk_user_id: str) -> dict[str, str | None]:
     """Load the one PostgreSQL profile linked to a verified Clerk subject."""
-    db = SessionLocal()
-    try:
-        student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
-        mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
-        if student and mentor:
-            raise HTTPException(status_code=409, detail="Clerk user is linked to multiple application profiles.")
-        if student:
-            if not student.roll_no:
-                raise HTTPException(status_code=409, detail="Linked student profile has no roll number.")
-            return {"role": "student", "identifier": student.roll_no, "year": student.year}
-        if mentor:
-            if not mentor.username:
-                raise HTTPException(status_code=409, detail="Linked mentor profile has no username.")
-            return {"role": "mentor", "identifier": mentor.username, "year": None}
-        raise HTTPException(status_code=403, detail="This Clerk user has no linked application profile.")
-    except HTTPException:
-        raise
-    except SQLAlchemyError as error:
-        logger.error("Authenticated profile lookup failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=503, detail="Application profile lookup is unavailable.") from error
-    finally:
-        db.close()
+    with SessionLocal() as db:
+        try:
+            student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+            mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+            if student and mentor:
+                raise HTTPException(status_code=409, detail="Clerk user is linked to multiple application profiles.")
+            if student:
+                if not student.roll_no:
+                    raise HTTPException(status_code=409, detail="Linked student profile has no roll number.")
+                return {"role": "student", "identifier": student.roll_no, "year": student.year}
+            if mentor:
+                if not mentor.username:
+                    raise HTTPException(status_code=409, detail="Linked mentor profile has no username.")
+                return {"role": "mentor", "identifier": mentor.username, "year": None}
+            raise HTTPException(status_code=403, detail="This Clerk user has no linked application profile.")
+        except HTTPException:
+            raise
+        except SQLAlchemyError as error:
+            logger.error("Authenticated profile lookup failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=503, detail="Application profile lookup is unavailable.") from error
 
 
 @app.middleware("http")
@@ -331,110 +329,110 @@ def delete_current_account(request: Request):
     return delete_profile_account(request.state.clerk_user_id, request.state.profile)
 
 
-def delete_profile_account(clerk_user_id, profile):
-    db = SessionLocal()
-    try:
-        if profile["role"] == "student":
-            account = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
-        else:
-            account = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
-        if not account:
-            raise HTTPException(status_code=404, detail="Your application profile no longer exists.")
+def delete_profile_account(clerk_user_id, profile, *, account_id: int | None = None):
+    with SessionLocal() as db:
+        try:
+            model = Student if profile["role"] == "student" else Mentor
+            query = db.query(model)
+            if account_id is not None:
+                query = query.filter(model.id == account_id, model.clerk_user_id == clerk_user_id)
+            elif clerk_user_id:
+                query = query.filter(model.clerk_user_id == clerk_user_id)
+            else:
+                raise HTTPException(status_code=400, detail="An account identifier is required.")
+            account = query.first()
+            if not account:
+                raise HTTPException(status_code=404, detail="Your application profile no longer exists.")
 
-        secret_key = os.getenv("CLERK_SECRET_KEY", "").strip()
-        if clerk_user_id and not secret_key:
-            raise HTTPException(status_code=503, detail="Clerk account deletion is not configured.")
+            secret_key = os.getenv("CLERK_SECRET_KEY", "").strip()
+            if clerk_user_id and not secret_key:
+                raise HTTPException(status_code=503, detail="Clerk account deletion is not configured.")
 
-        # Remove credentials first. Team, roster, invitation, review, and project
-        # rows intentionally remain because they are not login-profile records.
-        if clerk_user_id:
-            Clerk(bearer_auth=secret_key).users.delete(user_id=clerk_user_id, timeout_ms=10_000)
-        db.delete(account)
-        db.commit()
-        return {"message": "Account deleted.", "role": profile["role"]}
-    except HTTPException:
-        db.rollback()
-        raise
-    except SQLAlchemyError as error:
-        db.rollback()
-        logger.error("Clerk user was deleted but application profile removal failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=500, detail="Your Clerk account was deleted, but the application profile could not be removed.") from error
-    except Exception as error:  # Clerk SDK errors are intentionally not exposed to the browser.
-        logger.error("Could not delete Clerk account (%s)", type(error).__name__)
-        raise HTTPException(status_code=503, detail="Could not delete the Clerk account. Please try again.") from error
-    finally:
-        db.close()
+            # Remove credentials first. Academic records intentionally remain.
+            if clerk_user_id:
+                Clerk(bearer_auth=secret_key).users.delete(user_id=clerk_user_id, timeout_ms=10_000)
+            db.delete(account)
+            db.commit()
+            return {"message": "Account deleted.", "role": profile["role"]}
+        except HTTPException:
+            db.rollback()
+            raise
+        except SQLAlchemyError as error:
+            db.rollback()
+            logger.error("Clerk user was deleted but application profile removal failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=500, detail="Your Clerk account was deleted, but the application profile could not be removed.") from error
+        except Exception as error:  # Clerk SDK errors are intentionally not exposed to the browser.
+            logger.error("Could not delete Clerk account (%s)", type(error).__name__)
+            raise HTTPException(status_code=503, detail="Could not delete the Clerk account. Please try again.") from error
 
 
 @app.post("/api/profile/link")
 def link_clerk_profile(data: ClerkProfileLinkRequest, request: Request):
     """Create a PostgreSQL profile bound to the verified Clerk session subject."""
     clerk_user_id = request.state.clerk_user_id
-    db = SessionLocal()
-    try:
-        linked_student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
-        linked_mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
+    with SessionLocal() as db:
+        try:
+            linked_student = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
+            linked_mentor = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
 
-        if data.role == "student":
-            roll_no = (data.roll_no or "").strip()
-            if not roll_no:
-                raise HTTPException(status_code=422, detail="Roll number is required.")
-            if linked_mentor:
-                raise HTTPException(status_code=409, detail="This Clerk user is already linked as a mentor.")
-            if linked_student:
-                if linked_student.roll_no != roll_no:
-                    raise HTTPException(status_code=409, detail="This Clerk user is already linked to another roll number.")
+            if data.role == "student":
+                roll_no = (data.roll_no or "").strip()
+                if not roll_no:
+                    raise HTTPException(status_code=422, detail="Roll number is required.")
+                if linked_mentor:
+                    raise HTTPException(status_code=409, detail="This Clerk user is already linked as a mentor.")
+                if linked_student:
+                    if linked_student.roll_no != roll_no:
+                        raise HTTPException(status_code=409, detail="This Clerk user is already linked to another roll number.")
+                    db.commit()
+                    return {
+                        "role": "student",
+                        "roll_no": linked_student.roll_no,
+                        "year": linked_student.year,
+                    }
+
+                if not data.enrollment_code or not data.year:
+                    raise HTTPException(status_code=422, detail="Enrollment code and year are required.")
+                profile = redeem_student(db, clerk_user_id, roll_no, data.year, data.enrollment_code)
                 db.commit()
                 return {
                     "role": "student",
-                    "roll_no": linked_student.roll_no,
-                    "year": linked_student.year,
+                    "roll_no": profile.roll_no,
+                    "year": profile.year,
                 }
 
-            if not data.enrollment_code or not data.year:
-                raise HTTPException(status_code=422, detail="Enrollment code and year are required.")
-            profile = redeem_student(db, clerk_user_id, roll_no, data.year, data.enrollment_code)
-            db.commit()
-            return {
-                "role": "student",
-                "roll_no": profile.roll_no,
-                "year": profile.year,
-            }
+            mentor_name = (data.mentor_name or "").strip()
+            if not mentor_name:
+                raise HTTPException(status_code=422, detail="Mentor name is required.")
+            if linked_student:
+                raise HTTPException(status_code=409, detail="This Clerk user is already linked as a student.")
+            if linked_mentor:
+                if (linked_mentor.username or "").casefold() != mentor_name.casefold():
+                    raise HTTPException(status_code=409, detail="This Clerk user is already linked to another mentor name.")
+                db.commit()
+                return {
+                    "role": "mentor",
+                    "mentor_name": linked_mentor.username,
+                }
 
-        mentor_name = (data.mentor_name or "").strip()
-        if not mentor_name:
-            raise HTTPException(status_code=422, detail="Mentor name is required.")
-        if linked_student:
-            raise HTTPException(status_code=409, detail="This Clerk user is already linked as a student.")
-        if linked_mentor:
-            if (linked_mentor.username or "").casefold() != mentor_name.casefold():
-                raise HTTPException(status_code=409, detail="This Clerk user is already linked to another mentor name.")
+            if not data.enrollment_code:
+                raise HTTPException(422, "Mentor enrollment code is required.")
+            profile = redeem_mentor(db, clerk_user_id, mentor_name, data.enrollment_code)
             db.commit()
             return {
                 "role": "mentor",
-                "mentor_name": linked_mentor.username,
+                "mentor_name": profile.username,
             }
-
-        if not data.enrollment_code:
-            raise HTTPException(422, "Mentor enrollment code is required.")
-        profile = redeem_mentor(db, clerk_user_id, mentor_name, data.enrollment_code)
-        db.commit()
-        return {
-            "role": "mentor",
-            "mentor_name": profile.username,
-        }
-    except HTTPException:
-        db.rollback()
-        raise
-    except IntegrityError as error:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="This profile or Clerk user is already linked.") from error
-    except SQLAlchemyError as error:
-        db.rollback()
-        logger.error("Clerk profile link persistence failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=500, detail="Could not save the application profile.") from error
-    finally:
-        db.close()
+        except HTTPException:
+            db.rollback()
+            raise
+        except IntegrityError as error:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="This profile or Clerk user is already linked.") from error
+        except SQLAlchemyError as error:
+            db.rollback()
+            logger.error("Clerk profile link persistence failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=500, detail="Could not save the application profile.") from error
 
 MAX_PLAGIARISM_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_PLAGIARISM_RUNTIME_SECONDS = 90
@@ -592,8 +590,7 @@ async def chat_stream(prompt: Annotated[str, Query(min_length=1, max_length=4000
 @app.post("/mentor/axiom-stream")
 async def mentor_axiom_stream(data: MentorAxiomRequest, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(
             func.lower(Mentor.username) == mentor_user.strip().lower()
         ).first()
@@ -606,8 +603,6 @@ async def mentor_axiom_stream(data: MentorAxiomRequest, request: Request):
         abstract = (project.project_abstract or "")[:5000]
         group_name = str(project.group_no or "")[:200]
         year = (project.year or "")[:100]
-    finally:
-        db.close()
 
     question = data.question.strip()
     if not question:
@@ -647,166 +642,158 @@ def login():
 def create_team(data: CreateTeamRequest, request: Request):
     profile = require_profile_role(request, "student")
     roll_no = profile["identifier"]
-    db = SessionLocal()
-    try:
-        student = db.query(Student).filter(
-            func.lower(Student.roll_no) == roll_no.strip().lower()
-        ).with_for_update().first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student account not found.")
-        if db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first():
-            raise HTTPException(status_code=400, detail="You are already in a team. You cannot create another one.")
+    with SessionLocal() as db:
+        try:
+            student = db.query(Student).filter(
+                func.lower(Student.roll_no) == roll_no.strip().lower()
+            ).with_for_update().first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student account not found.")
+            if db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first():
+                raise HTTPException(status_code=400, detail="You are already in a team. You cannot create another one.")
 
-        code = generate_team_code()
-        while db.query(Team).filter(Team.team_code == code).first():
             code = generate_team_code()
+            while db.query(Team).filter(Team.team_code == code).first():
+                code = generate_team_code()
 
-        new_team = Team(
-            team_name=data.team_name.strip(),
-            team_code=code,
-            description=data.description,
-            max_members=data.max_members,
-            year=student.year,
-            created_by_student_id=student.id,
-        )
-        db.add(new_team)
-        db.flush() # get new_team.id before commit to link member
+            new_team = Team(
+                team_name=data.team_name.strip(),
+                team_code=code,
+                description=data.description,
+                max_members=data.max_members,
+                year=student.year,
+                created_by_student_id=student.id,
+            )
+            db.add(new_team)
+            db.flush() # get new_team.id before commit to link member
         
-        member = TeamMember(team_id=new_team.id, roll_no=roll_no)
-        db.add(member)
+            member = TeamMember(team_id=new_team.id, roll_no=roll_no)
+            db.add(member)
 
-        db.commit()
-        db.refresh(new_team)
-        all_members = db.query(TeamMember).filter(TeamMember.team_id == new_team.id).all()
-        member_list = [m.roll_no for m in all_members]
-        return {
-            "message": "Team created successfully",
-            "team_code": code,
-            "team_name": new_team.team_name,
-            "members": member_list
-        }
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error("Team creation failed (%s)", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Could not create the team.") from e
-    finally:
-        db.close()
+            db.commit()
+            db.refresh(new_team)
+            all_members = db.query(TeamMember).filter(TeamMember.team_id == new_team.id).all()
+            member_list = [m.roll_no for m in all_members]
+            return {
+                "message": "Team created successfully",
+                "team_code": code,
+                "team_name": new_team.team_name,
+                "members": member_list
+            }
+        except HTTPException:
+            raise
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Team creation failed (%s)", type(e).__name__)
+            raise HTTPException(status_code=500, detail="Could not create the team.") from e
 
 @app.post("/join-team")
 def join_team(data: JoinTeamRequest, request: Request):
     profile = require_profile_role(request, "student")
     roll_no = profile["identifier"]
-    db = SessionLocal()
-    try:
-        student = db.query(Student).filter(
-            func.lower(Student.roll_no) == roll_no.strip().lower()
-        ).with_for_update().first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student account not found.")
-        if db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first():
-            raise HTTPException(status_code=400, detail="You are already in a team. You cannot join multiple teams.")
+    with SessionLocal() as db:
+        try:
+            student = db.query(Student).filter(
+                func.lower(Student.roll_no) == roll_no.strip().lower()
+            ).with_for_update().first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student account not found.")
+            if db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first():
+                raise HTTPException(status_code=400, detail="You are already in a team. You cannot join multiple teams.")
 
-        team = db.query(Team).filter(Team.team_code == data.team_code).with_for_update().first()
-        if not team:
-            raise HTTPException(status_code=404, detail="Invalid team code")
+            team = db.query(Team).filter(Team.team_code == data.team_code).with_for_update().first()
+            if not team:
+                raise HTTPException(status_code=404, detail="Invalid team code")
         
-        current_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
-        if current_members >= (team.max_members or 4):
-            raise HTTPException(status_code=400, detail="Team is full")
+            current_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
+            if current_members >= (team.max_members or 4):
+                raise HTTPException(status_code=400, detail="Team is full")
         
-        new_member = TeamMember(team_id=team.id, roll_no=roll_no)
-        db.add(new_member)
-        db.commit()
+            new_member = TeamMember(team_id=team.id, roll_no=roll_no)
+            db.add(new_member)
+            db.commit()
 
-        # Fetch the entire new list of members so the UI can draw the Roster
-        all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        member_list = [m.roll_no for m in all_members]
+            # Fetch the entire new list of members so the UI can draw the Roster
+            all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+            member_list = [m.roll_no for m in all_members]
 
-        return {
-            "message": "Successfully joined the team", 
-            "team_name": team.team_name,
-            "team_code": team.team_code,
-            "members": member_list
-        }
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error("Team join failed (%s)", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Could not join the team.") from e
-    finally:
-        db.close()
+            return {
+                "message": "Successfully joined the team",
+                "team_name": team.team_name,
+                "team_code": team.team_code,
+                "members": member_list
+            }
+        except HTTPException:
+            raise
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Team join failed (%s)", type(e).__name__)
+            raise HTTPException(status_code=500, detail="Could not join the team.") from e
 
 @app.get("/get-student-team")
 def get_student_team(request: Request):
     roll_no = require_profile_role(request, "student")["identifier"]
-    db = SessionLocal()
-    try:
-        member = db.query(TeamMember).filter(
-            func.lower(TeamMember.roll_no) == roll_no.strip().lower()
-        ).first()
-        if not member:
-            return {"has_team": False}
+    with SessionLocal() as db:
+        try:
+            member = db.query(TeamMember).filter(
+                func.lower(TeamMember.roll_no) == roll_no.strip().lower()
+            ).first()
+            if not member:
+                return {"has_team": False}
         
-        team = db.query(Team).filter(Team.id == member.team_id).first()
-        if not team:
-            return {"has_team": False}
+            team = db.query(Team).filter(Team.id == member.team_id).first()
+            if not team:
+                return {"has_team": False}
             
-        all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        member_list = [m.roll_no for m in all_members]
+            all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+            member_list = [m.roll_no for m in all_members]
         
-        return {
-            "has_team": True,
-            "team_name": team.team_name,
-            "team_code": team.team_code,
-            "members": member_list
-        }
-    except SQLAlchemyError as e:
-        logger.error("Student team lookup failed (%s)", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Could not load the team.") from e
-    finally:
-        db.close()
+            return {
+                "has_team": True,
+                "team_name": team.team_name,
+                "team_code": team.team_code,
+                "members": member_list
+            }
+        except SQLAlchemyError as e:
+            logger.error("Student team lookup failed (%s)", type(e).__name__)
+            raise HTTPException(status_code=500, detail="Could not load the team.") from e
 
 @app.post("/leave-team")
 def leave_team(request: Request):
     roll_no = require_profile_role(request, "student")["identifier"]
-    db = SessionLocal()
-    try:
-        student = db.query(Student).filter(
-            func.lower(Student.roll_no) == roll_no.strip().lower()
-        ).with_for_update().first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student account not found.")
-        member = db.query(TeamMember).filter(
-            func.lower(TeamMember.roll_no) == roll_no.strip().lower()
-        ).first()
-        if not member:
-            raise HTTPException(status_code=400, detail="You are not currently in a team.")
+    with SessionLocal() as db:
+        try:
+            student = db.query(Student).filter(
+                func.lower(Student.roll_no) == roll_no.strip().lower()
+            ).with_for_update().first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student account not found.")
+            member = db.query(TeamMember).filter(
+                func.lower(TeamMember.roll_no) == roll_no.strip().lower()
+            ).first()
+            if not member:
+                raise HTTPException(status_code=400, detail="You are not currently in a team.")
         
-        team = db.query(Team).filter(Team.id == member.team_id).with_for_update().first()
-        if not team:
-            raise HTTPException(status_code=404, detail="Team not found.")
-        team_id = team.id
-        db.delete(member)
-        # Clean up empty teams
-        remaining_members = db.query(TeamMember).filter(TeamMember.team_id == team_id).count()
-        if remaining_members == 0:
-            has_project = db.query(Project.id).filter(Project.team_id == team_id).first()
-            team = db.query(Team).filter(Team.id == team_id).first() if not has_project else None
-            if team:
-                db.delete(team)
-        db.commit()
-        return {"message": "Successfully left the team"}
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error("Leaving team failed (%s)", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Could not leave the team.") from e
-    finally:
-        db.close()
+            team = db.query(Team).filter(Team.id == member.team_id).with_for_update().first()
+            if not team:
+                raise HTTPException(status_code=404, detail="Team not found.")
+            team_id = team.id
+            db.delete(member)
+            # Clean up empty teams
+            remaining_members = db.query(TeamMember).filter(TeamMember.team_id == team_id).count()
+            if remaining_members == 0:
+                has_project = db.query(Project.id).filter(Project.team_id == team_id).first()
+                team = db.query(Team).filter(Team.id == team_id).first() if not has_project else None
+                if team:
+                    db.delete(team)
+            db.commit()
+            return {"message": "Successfully left the team"}
+        except HTTPException:
+            raise
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Leaving team failed (%s)", type(e).__name__)
+            raise HTTPException(status_code=500, detail="Could not leave the team.") from e
 
 @app.post("/submit-project")
 async def submit_project(data: ProjectSubmission, request: Request):
@@ -844,70 +831,68 @@ def _current_project_id_for_student(roll_no: str) -> int | None:
 
 def _save_project_submission(data: ProjectSubmission, request: Request):
     roll_no = require_profile_role(request, "student")["identifier"]
-    db = SessionLocal()
-    try:
-        # Find if the user is in a team
-        member = db.query(TeamMember).filter(
-            func.lower(TeamMember.roll_no) == roll_no.strip().lower()
-        ).first()
-        if not member:
-            raise HTTPException(status_code=400, detail="You must join a team to submit a project")
-        team = db.query(Team).filter(Team.id == member.team_id).with_for_update().first()
-        if not team:
-            raise HTTPException(status_code=404, detail="Team not found")
+    with SessionLocal() as db:
+        try:
+            # Find if the user is in a team
+            member = db.query(TeamMember).filter(
+                func.lower(TeamMember.roll_no) == roll_no.strip().lower()
+            ).first()
+            if not member:
+                raise HTTPException(status_code=400, detail="You must join a team to submit a project")
+            team = db.query(Team).filter(Team.id == member.team_id).with_for_update().first()
+            if not team:
+                raise HTTPException(status_code=404, detail="Team not found")
 
-        member_count = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
-        if member_count < 2:
-            raise HTTPException(status_code=400, detail="At least two students must be in the team before submitting a project idea.")
+            member_count = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
+            if member_count < 2:
+                raise HTTPException(status_code=400, detail="At least two students must be in the team before submitting a project idea.")
 
-        student = db.query(Student).filter(func.lower(Student.roll_no) == roll_no.strip().lower()).first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student account not found.")
-        project_name = data.project_name.strip()
-        project_abstract = data.project_abstract.strip()
-        if not project_name:
-            raise HTTPException(status_code=422, detail="Project title is required.")
+            student = db.query(Student).filter(func.lower(Student.roll_no) == roll_no.strip().lower()).first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student account not found.")
+            project_name = data.project_name.strip()
+            project_abstract = data.project_abstract.strip()
+            if not project_name:
+                raise HTTPException(status_code=422, detail="Project title is required.")
 
-        project = db.query(Project).filter(Project.team_id == team.id).with_for_update().first()
-        if project is None:
-            project = Project(team_id=team.id)
-            db.add(project)
-        # Students overwrite only the team project's content. The mentor assignment
-        # and roster ownership fields are preserved on resubmission.
-        project.year = student.year or team.year or ""
-        project.group_no = None
-        project.project_name = project_name
-        project.project_abstract = project_abstract
-        project.team_name = team.team_name
-        project.submitted_by_student_id = student.id
-        if engine.dialect.name == "postgresql":
-            text = f"{project_name}. {project_abstract}".strip()
-            project.embedding = CloudflareEmbeddingClient().embed(text)
-        member_rolls = [
-            row.roll_no for row in db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-            if row.roll_no
-        ]
-        if member_rolls:
-            for roster_entry in db.query(MentorStudent).filter(
-                func.lower(MentorStudent.prn).in_([value.strip().casefold() for value in member_rolls])
-            ).all():
-                # Mirror only the student-owned project title into mentor roster views.
-                roster_entry.project_name = project_name
-        db.commit()
-        db.refresh(project)
-        return {
-            "message": "Project idea submitted and updated for your team.",
-            "project_id": project.id,
-            "assigned_mentor": project.assigned_mentor_id is not None,
-        }
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error("Project submission persistence failed (%s)", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Could not save the project.") from e
-    finally:
-        db.close()
+            project = db.query(Project).filter(Project.team_id == team.id).with_for_update().first()
+            if project is None:
+                project = Project(team_id=team.id)
+                db.add(project)
+            # Students overwrite only the team project's content. The mentor assignment
+            # and roster ownership fields are preserved on resubmission.
+            project.year = student.year or team.year or ""
+            project.group_no = None
+            project.project_name = project_name
+            project.project_abstract = project_abstract
+            project.team_name = team.team_name
+            project.submitted_by_student_id = student.id
+            if engine.dialect.name == "postgresql":
+                text = f"{project_name}. {project_abstract}".strip()
+                project.embedding = CloudflareEmbeddingClient().embed(text)
+            member_rolls = [
+                row.roll_no for row in db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+                if row.roll_no
+            ]
+            if member_rolls:
+                for roster_entry in db.query(MentorStudent).filter(
+                    func.lower(MentorStudent.prn).in_([value.strip().casefold() for value in member_rolls])
+                ).all():
+                    # Mirror only the student-owned project title into mentor roster views.
+                    roster_entry.project_name = project_name
+            db.commit()
+            db.refresh(project)
+            return {
+                "message": "Project idea submitted and updated for your team.",
+                "project_id": project.id,
+                "assigned_mentor": project.assigned_mentor_id is not None,
+            }
+        except HTTPException:
+            raise
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Project submission persistence failed (%s)", type(e).__name__)
+            raise HTTPException(status_code=500, detail="Could not save the project.") from e
 
 @app.post("/check-plagiarism")
 async def check_plagiarism(
@@ -965,112 +950,106 @@ def mentor_login():
 @app.get("/api/projects")
 def list_projects(request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         projects = mentor_projects(db, mentor.id).order_by(Project.id.desc()).all()
         return [project_summary(project, mentor.id) for project in projects]
-    finally:
-        db.close()
 
 
 @app.patch("/api/projects/{project_id}/assign")
 def assign_project_to_current_mentor(project_id: int, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
-        if not mentor:
-            raise HTTPException(status_code=404, detail="Mentor account not found.")
-        project = db.query(Project).filter(Project.id == project_id).first()
-        if not project or project.team_id is None:
-            raise HTTPException(status_code=404, detail="Team project not found.")
-        team_id = project.team_id
-        team = db.query(Team).filter(Team.id == team_id).with_for_update().first()
-        if not team:
-            raise HTTPException(status_code=404, detail="Project team not found.")
-        project = db.query(Project).filter(
-            Project.id == project_id, Project.team_id == team_id
-        ).populate_existing().with_for_update().first()
-        if not project:
-            raise HTTPException(status_code=404, detail="Team project not found.")
-        if project.assigned_mentor_id not in (None, mentor.id):
-            raise HTTPException(status_code=409, detail="This team project is already assigned to another mentor.")
+    with SessionLocal() as db:
+        try:
+            mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+            if not mentor:
+                raise HTTPException(status_code=404, detail="Mentor account not found.")
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if not project or project.team_id is None:
+                raise HTTPException(status_code=404, detail="Team project not found.")
+            team_id = project.team_id
+            team = db.query(Team).filter(Team.id == team_id).with_for_update().first()
+            if not team:
+                raise HTTPException(status_code=404, detail="Project team not found.")
+            project = db.query(Project).filter(
+                Project.id == project_id, Project.team_id == team_id
+            ).populate_existing().with_for_update().first()
+            if not project:
+                raise HTTPException(status_code=404, detail="Team project not found.")
+            if project.assigned_mentor_id not in (None, mentor.id):
+                raise HTTPException(status_code=409, detail="This team project is already assigned to another mentor.")
 
-        db.query(TeamMember).filter(TeamMember.team_id == team.id).with_for_update().all()
-        members: list[TeamMember] = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        roll_numbers = [member.roll_no for member in members if member.roll_no]
-        if not roll_numbers:
-            raise HTTPException(status_code=409, detail="This project has no current team members.")
-        mentor_key_value = mentor_key(mentor.username)
-        existing_roster = db.query(MentorStudent).filter(
-            func.lower(MentorStudent.prn).in_([value.strip().casefold() for value in roll_numbers])
-        ).all()
-        roster_by_prn = {
-            entry.prn.strip().casefold(): entry for entry in existing_roster if entry.prn
-        }
-        normalized_roll_numbers = [value.strip().casefold() for value in roll_numbers]
-        if len(normalized_roll_numbers) != len(set(normalized_roll_numbers)):
-            raise HTTPException(status_code=409, detail="This team's membership data contains duplicate student IDs.")
-        for roll_number in roll_numbers:
-            entry = roster_by_prn.get(roll_number.strip().casefold())
-            if entry and entry.mentor_key != mentor_key_value:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A team member is already assigned to another mentor. Contact an administrator to resolve the roster.",
-                )
+            db.query(TeamMember).filter(TeamMember.team_id == team.id).with_for_update().all()
+            members: list[TeamMember] = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+            roll_numbers = [member.roll_no for member in members if member.roll_no]
+            if not roll_numbers:
+                raise HTTPException(status_code=409, detail="This project has no current team members.")
+            mentor_key_value = mentor_key(mentor.username)
+            existing_roster = db.query(MentorStudent).filter(
+                func.lower(MentorStudent.prn).in_([value.strip().casefold() for value in roll_numbers])
+            ).all()
+            roster_by_prn = {
+                entry.prn.strip().casefold(): entry for entry in existing_roster if entry.prn
+            }
+            normalized_roll_numbers = [value.strip().casefold() for value in roll_numbers]
+            if len(normalized_roll_numbers) != len(set(normalized_roll_numbers)):
+                raise HTTPException(status_code=409, detail="This team's membership data contains duplicate student IDs.")
+            for roll_number in roll_numbers:
+                entry = roster_by_prn.get(roll_number.strip().casefold())
+                if entry and entry.mentor_key != mentor_key_value:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A team member is already assigned to another mentor. Contact an administrator to resolve the roster.",
+                    )
 
-        project.assigned_mentor_id = mentor.id
-        project.mentor_assigned_at = project.mentor_assigned_at or datetime.now().isoformat(timespec="seconds")
-        for roll_number in roll_numbers:
-            student = db.query(Student).filter(
-                func.lower(Student.roll_no) == roll_number.casefold()
-            ).first()
-            entry = roster_by_prn.get(roll_number.strip().casefold())
-            if entry is None:
-                entry = MentorStudent(
-                    mentor_name=mentor.username,
-                    mentor_key=mentor_key_value,
-                    student_name=roll_number,
-                    prn=roll_number,
-                    group_name=team.team_name,
-                    year=student.year if student else team.year,
-                )
-                db.add(entry)
-            else:
-                entry.mentor_name = mentor.username
-                entry.mentor_key = mentor_key_value
-                entry.student_name = entry.student_name or roll_number
-                entry.group_name = entry.group_name or team.team_name
-                entry.year = entry.year or (student.year if student else team.year)
-            # This is the student-owned project field mirrored into the mentor roster.
-            entry.project_name = project.project_name
-        db.commit()
-        return {
-            "message": "You are now assigned to this team's project.",
-            "project_id": project.id,
-            "team_id": team.id,
-            "team_name": team.team_name,
-            "assigned_to_me": True,
-        }
-    except HTTPException:
-        db.rollback()
-        raise
-    except SQLAlchemyError as error:
-        db.rollback()
-        logger.error("Project assignment failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=500, detail="Could not assign the project.") from error
-    finally:
-        db.close()
+            project.assigned_mentor_id = mentor.id
+            project.mentor_assigned_at = project.mentor_assigned_at or datetime.now().isoformat(timespec="seconds")
+            for roll_number in roll_numbers:
+                student = db.query(Student).filter(
+                    func.lower(Student.roll_no) == roll_number.casefold()
+                ).first()
+                entry = roster_by_prn.get(roll_number.strip().casefold())
+                if entry is None:
+                    entry = MentorStudent(
+                        mentor_name=mentor.username,
+                        mentor_key=mentor_key_value,
+                        student_name=roll_number,
+                        prn=roll_number,
+                        group_name=team.team_name,
+                        year=student.year if student else team.year,
+                    )
+                    db.add(entry)
+                else:
+                    entry.mentor_name = mentor.username
+                    entry.mentor_key = mentor_key_value
+                    entry.student_name = entry.student_name or roll_number
+                    entry.group_name = entry.group_name or team.team_name
+                    entry.year = entry.year or (student.year if student else team.year)
+                # This is the student-owned project field mirrored into the mentor roster.
+                entry.project_name = project.project_name
+            db.commit()
+            return {
+                "message": "You are now assigned to this team's project.",
+                "project_id": project.id,
+                "team_id": team.id,
+                "team_name": team.team_name,
+                "assigned_to_me": True,
+            }
+        except HTTPException:
+            db.rollback()
+            raise
+        except SQLAlchemyError as error:
+            db.rollback()
+            logger.error("Project assignment failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=500, detail="Could not assign the project.") from error
 
 
 @app.get("/api/students")
 def get_students(request: Request) -> list[dict[str, str | int | None]]:
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1107,8 +1086,6 @@ def get_students(request: Request) -> list[dict[str, str | int | None]]:
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1"
             })
         return result
-    finally:
-        db.close()
 
 
 @app.post("/mentor/students/import")
@@ -1120,101 +1097,98 @@ async def import_mentor_students(file: Annotated[UploadFile, File()], request: R
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="The Excel file must be 5 MB or smaller.")
 
-    db = SessionLocal()
-    try:
-        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
-        if not mentor:
-            raise HTTPException(status_code=404, detail="Mentor account not found.")
+    with SessionLocal() as db:
         try:
-            students = [row for row in parse_mentor_roster(content, mentor.username)
-                        if row["mentor_key"] == mentor_key(mentor.username)]
-        except (ValueError, InvalidFileException, BadZipFile) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if not students:
-            raise HTTPException(status_code=400, detail="The sheet has no students assigned to this mentor. Your roster was not changed.")
+            mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+            if not mentor:
+                raise HTTPException(status_code=404, detail="Mentor account not found.")
+            try:
+                students = [row for row in parse_mentor_roster(content, mentor.username)
+                            if row["mentor_key"] == mentor_key(mentor.username)]
+            except (ValueError, InvalidFileException, BadZipFile) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if not students:
+                raise HTTPException(status_code=400, detail="The sheet has no students assigned to this mentor. Your roster was not changed.")
 
-        # An upload represents the mentor's complete current roster. Reject duplicate
-        # PRNs or students assigned elsewhere before replacing any saved rows.
-        incoming_prns = [row["prn"].strip().casefold() for row in students if row["prn"].strip()]
-        if len(incoming_prns) != len(set(incoming_prns)):
-            raise HTTPException(status_code=400, detail="The roster contains duplicate student PRNs.")
-        current_mentor_key = mentor_key(mentor.username)
-        for prn in incoming_prns:
-            other_owner = db.query(MentorStudent).filter(
-                func.lower(MentorStudent.prn) == prn,
-                MentorStudent.mentor_key != current_mentor_key,
-            ).first()
-            if other_owner:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A student in this sheet is assigned to another mentor. Contact an administrator to change that assignment.",
+            # An upload represents the mentor's complete current roster. Reject duplicate
+            # PRNs or students assigned elsewhere before replacing any saved rows.
+            incoming_prns = [row["prn"].strip().casefold() for row in students if row["prn"].strip()]
+            if len(incoming_prns) != len(set(incoming_prns)):
+                raise HTTPException(status_code=400, detail="The roster contains duplicate student PRNs.")
+            current_mentor_key = mentor_key(mentor.username)
+            for prn in incoming_prns:
+                other_owner = db.query(MentorStudent).filter(
+                    func.lower(MentorStudent.prn) == prn,
+                    MentorStudent.mentor_key != current_mentor_key,
+                ).first()
+                if other_owner:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A student in this sheet is assigned to another mentor. Contact an administrator to change that assignment.",
+                    )
+                # A roster upload cannot create an alternate route to a project
+                # assigned to another mentor, even if that mentor removed the PRN
+                # from their spreadsheet roster.
+                _project_available_to_mentor(db, prn, mentor.id)
+
+            added = 0
+            updated = 0
+            retained_ids: set[int] = set()
+            for row in students:
+                # An uploaded sheet can describe students and groups, but it cannot
+                # assign rows to a different mentor account.
+                row["mentor_name"] = mentor.username
+                row["mentor_key"] = current_mentor_key
+                if row["prn"]:
+                    existing = db.query(MentorStudent).filter(
+                        func.lower(MentorStudent.prn) == row["prn"].strip().casefold()
+                    ).first()
+                else:
+                    existing = db.query(MentorStudent).filter(
+                        MentorStudent.mentor_key == current_mentor_key,
+                        func.lower(MentorStudent.student_name) == row["student_name"].lower(),
+                    ).first()
+                if existing:
+                    retained_ids.add(existing.id)
+                    updated += 1
+                else:
+                    existing = MentorStudent()
+                    db.add(existing)
+                    added += 1
+                existing.mentor_name = mentor.username
+                existing.mentor_key = current_mentor_key
+                existing.student_name = row["student_name"]
+                existing.prn = row["prn"] or None
+                existing.group_name = row["group_name"] or None
+                existing.year = row["year"] or None
+                team_project = _team_project_for_student(db, row["prn"]) if row["prn"] else None
+                # Project titles submitted by a student are canonical and cannot be
+                # replaced by a stale roster spreadsheet.
+                existing.project_name = (
+                    team_project.project_name if team_project else row["project_name"] or None
                 )
-            # A roster upload cannot create an alternate route to a project
-            # assigned to another mentor, even if that mentor removed the PRN
-            # from their spreadsheet roster.
-            _project_available_to_mentor(db, prn, mentor.id)
-
-        added = 0
-        updated = 0
-        retained_ids: set[int] = set()
-        for row in students:
-            # An uploaded sheet can describe students and groups, but it cannot
-            # assign rows to a different mentor account.
-            row["mentor_name"] = mentor.username
-            row["mentor_key"] = current_mentor_key
-            if row["prn"]:
-                existing = db.query(MentorStudent).filter(
-                    func.lower(MentorStudent.prn) == row["prn"].strip().casefold()
-                ).first()
-            else:
-                existing = db.query(MentorStudent).filter(
-                    MentorStudent.mentor_key == current_mentor_key,
-                    func.lower(MentorStudent.student_name) == row["student_name"].lower(),
-                ).first()
-            if existing:
-                retained_ids.add(existing.id)
-                updated += 1
-            else:
-                existing = MentorStudent()
-                db.add(existing)
-                added += 1
-            existing.mentor_name = mentor.username
-            existing.mentor_key = current_mentor_key
-            existing.student_name = row["student_name"]
-            existing.prn = row["prn"] or None
-            existing.group_name = row["group_name"] or None
-            existing.year = row["year"] or None
-            team_project = _team_project_for_student(db, row["prn"]) if row["prn"] else None
-            # Project titles submitted by a student are canonical and cannot be
-            # replaced by a stale roster spreadsheet.
-            existing.project_name = (
-                team_project.project_name if team_project else row["project_name"] or None
-            )
-        stale_rows = db.query(MentorStudent).filter(
-            MentorStudent.mentor_key == current_mentor_key
-        ).all()
-        removed = 0
-        for stale in stale_rows:
-            if stale.id not in retained_ids and (not stale.prn or stale.prn.strip().casefold() not in incoming_prns):
-                db.delete(stale)
-                removed += 1
-        db.commit()
-        return {"added": added, "updated": updated, "removed": removed, "total": len(students)}
-    except HTTPException:
-        db.rollback()
-        raise
-    except SQLAlchemyError:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+            stale_rows = db.query(MentorStudent).filter(
+                MentorStudent.mentor_key == current_mentor_key
+            ).all()
+            removed = 0
+            for stale in stale_rows:
+                if stale.id not in retained_ids and (not stale.prn or stale.prn.strip().casefold() not in incoming_prns):
+                    db.delete(stale)
+                    removed += 1
+            db.commit()
+            return {"added": added, "updated": updated, "removed": removed, "total": len(students)}
+        except HTTPException:
+            db.rollback()
+            raise
+        except SQLAlchemyError:
+            db.rollback()
+            raise
 
 
 @app.get("/mentor/students")
 def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1252,15 +1226,12 @@ def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1",
             })
         return result
-    finally:
-        db.close()
 
 
 @app.post("/team-invitations", status_code=201)
 def create_team_invitation(data: TeamInviteRequest, request: Request):
     inviter_roll_no = require_profile_role(request, "student")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         inviter_roll = inviter_roll_no
         invitee_input = data.invitee_roll_no.strip()
         inviter_student = db.query(Student).filter(
@@ -1309,15 +1280,12 @@ def create_team_invitation(data: TeamInviteRequest, request: Request):
         db.commit()
         db.refresh(invitation)
         return {"id": invitation.id, "message": f"Invitation sent to {invitee.roll_no}."}
-    finally:
-        db.close()
 
 
 @app.get("/team-invitations")
 def get_team_invitations(request: Request):
     roll_no = require_profile_role(request, "student")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         invitations = db.query(TeamInvitation).filter(
             func.lower(TeamInvitation.invitee_roll_no) == roll_no.strip().lower(),
             TeamInvitation.status == "pending",
@@ -1332,8 +1300,6 @@ def get_team_invitations(request: Request):
                     "inviter_roll_no": invitation.inviter_roll_no,
                 })
         return result
-    finally:
-        db.close()
 
 
 @app.patch("/team-invitations/{invitation_id}")
@@ -1342,8 +1308,7 @@ def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse, req
     action = data.action.strip().lower()
     if action not in {"accept", "decline"}:
         raise HTTPException(status_code=400, detail="Invitation action must be accept or decline.")
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         student = db.query(Student).filter(
             func.lower(Student.roll_no) == roll_no.strip().lower()
         ).with_for_update().first()
@@ -1391,8 +1356,6 @@ def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse, req
             "team_code": team.team_code,
             "members": [member.roll_no for member in members],
         }
-    finally:
-        db.close()
 
 
 def review_payload(review: MentorReview):
@@ -1412,8 +1375,7 @@ def review_payload(review: MentorReview):
 @app.get("/mentor/dashboard")
 def get_mentor_dashboard(request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1446,15 +1408,12 @@ def get_mentor_dashboard(request: Request):
             "reviews_done": sum(review.status == "completed" for review in reviews),
             "reviews": [review_payload(review) for review in reviews[:20]],
         }
-    finally:
-        db.close()
 
 
 @app.post("/mentor/reviews", status_code=201)
 def create_mentor_review(data: MentorReviewCreate, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1489,8 +1448,6 @@ def create_mentor_review(data: MentorReviewCreate, request: Request):
         db.commit()
         db.refresh(review)
         return review_payload(review)
-    finally:
-        db.close()
 
 
 @app.patch("/mentor/reviews/{review_id}")
@@ -1498,8 +1455,7 @@ def update_mentor_review_status(review_id: int, data: MentorReviewStatus, reques
     mentor_user = require_profile_role(request, "mentor")["identifier"]
     if data.status not in {"completed", "cancelled"}:
         raise HTTPException(status_code=400, detail="Review status must be completed or cancelled.")
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1513,15 +1469,12 @@ def update_mentor_review_status(review_id: int, data: MentorReviewStatus, reques
         review.completed_at = datetime.now().isoformat(timespec="seconds") if data.status == "completed" else None
         db.commit()
         return review_payload(review)
-    finally:
-        db.close()
 
 
 @app.post("/mentor/students", status_code=201)
 def add_mentor_student(data: MentorStudentCreate, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1546,15 +1499,12 @@ def add_mentor_student(data: MentorStudentCreate, request: Request):
         db.commit()
         db.refresh(entry)
         return {"id": entry.id, "message": "Student added to mentor roster."}
-    finally:
-        db.close()
 
 
 @app.put("/mentor/students/{roster_id}")
 def update_mentor_student(roster_id: int, data: MentorStudentUpdate, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1581,15 +1531,12 @@ def update_mentor_student(roster_id: int, data: MentorStudentUpdate, request: Re
         entry.year = data.year.strip() or None
         db.commit()
         return {"message": "Student updated."}
-    finally:
-        db.close()
 
 
 @app.delete("/mentor/students/{roster_id}")
 def delete_mentor_student(roster_id: int, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
         if not mentor:
             raise HTTPException(status_code=404, detail="Mentor account not found.")
@@ -1602,8 +1549,6 @@ def delete_mentor_student(roster_id: int, request: Request):
         db.delete(entry)
         db.commit()
         return {"message": "Student removed from mentor roster."}
-    finally:
-        db.close()
 
 
 def require_enrollment_admin(request: Request):
@@ -1680,4 +1625,4 @@ def delete_admin_account(role: Literal["student", "mentor"], account_id: int, re
         subject = account.clerk_user_id
         if subject == request.state.clerk_user_id:
             raise HTTPException(409, "Use account settings to delete your own account.")
-    return delete_profile_account(subject, {"role": role, "id": account_id})
+    return delete_profile_account(subject, {"role": role}, account_id=account_id)

@@ -85,13 +85,14 @@ class AdminEnrollmentTests(unittest.TestCase):
 
     def test_unlinked_legacy_profile_can_be_deleted_without_clerk_configuration(self):
         with self.sessions() as db:
-            db.add(Mentor(id=1, username='Legacy mentor'))
+            db.add_all([Mentor(id=1, username='Other legacy mentor'), Mentor(id=2, username='Legacy mentor')])
             db.commit()
         with patch.dict(os.environ, {'CLERK_SECRET_KEY': ''}), patch.object(main, 'Clerk') as clerk:
-            main.delete_admin_account('mentor', 1, self.request)
+            main.delete_admin_account('mentor', 2, self.request)
             clerk.assert_not_called()
         with self.sessions() as db:
-            self.assertIsNone(db.get(Mentor, 1))
+            self.assertIsNotNone(db.get(Mentor, 1))
+            self.assertIsNone(db.get(Mentor, 2))
 
     def test_admin_cannot_delete_own_profile(self):
         with self.sessions() as db:

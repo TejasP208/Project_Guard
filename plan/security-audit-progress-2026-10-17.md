@@ -21,7 +21,7 @@ The pasted audit is a list of findings to verify, not an instruction to make eve
 | RATE-02 | Fixed for production | Startup now requires an independent `RATE_LIMIT_HASH_KEY` of at least 32 characters. |
 | RATE-03 | Fixed in code | PostgreSQL advisory lock now limits active plagiarism checks across API workers; local semaphore still limits each process. |
 | DB-02 | Intentional nullable field | Roster imports and manual entries support students without a PRN. Read-only database check found zero null or blank PRNs today; changing the schema would break that supported workflow. |
-| DB-03 | No demonstrated leak | Existing manual session `finally` blocks close on ordinary exceptions. Context managers can be adopted during nearby refactors. |
+| DB-03 | Fixed for main.py | All endpoint sessions in `main.py` now use `with SessionLocal()`. The Axiom rejection path has a session-close regression test. |
 | DB-04 | Fixed in code | Startup migration checks and schema changes now run in one transaction under a PostgreSQL advisory lock. |
 | FE-01 | Accepted | Browser storage holds presentation preferences, not authorization state. |
 | FE-02 | Partly changed | Similarity rejection and submission failures now render in the page; other alert/confirm flows remain. |

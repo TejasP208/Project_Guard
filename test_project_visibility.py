@@ -94,6 +94,21 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertEqual(response.text, "Reviewed")
         self.assertIn("Verified private context", prompts[0])
 
+    def test_axiom_closes_database_session_on_rejected_project(self):
+        closed = []
+        def tracked_session():
+            db = self.sessions()
+            original_close = db.close
+            def close():
+                closed.append(True)
+                original_close()
+            db.close = close
+            return db
+        with patch.object(main, "SessionLocal", side_effect=tracked_session):
+            response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": 999, "question": "Review"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(closed, [True])
+
     def test_pending_invitation_omits_join_code_and_profile_link_omits_subject(self):
         invitations = self.client.get("/team-invitations", headers=self.headers("student:S1")).json()
         self.assertEqual(set(invitations[0]), {"id", "team_name", "inviter_roll_no"})

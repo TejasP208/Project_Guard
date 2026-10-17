@@ -13,14 +13,15 @@ const getSettledSessionToken = async (clerk) => {
     // Treat the active session/token as the source of truth. `isSignedIn` is a
     // convenience state flag and can briefly lag session restoration after a
     // redirect, so it must not prevent a token request.
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    const maxAttempts = 100; // Allow up to ten seconds for a slow Clerk session restore.
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const session = clerk.session;
         if (session && typeof session.getToken === 'function') {
             try {
                 const token = await session.getToken();
                 if (token) return token;
             } catch (error) {
-                if (attempt === 99) throw error;
+                if (attempt === maxAttempts - 1) throw error;
             }
         }
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -104,9 +105,12 @@ window.projectGuardSessionReady = (async () => {
         if (profile.role !== expectedRole) {
             const correctPortal = profile.role === 'mentor' ? 'mentor_index.html' : 'index.html';
             showSessionError(
-                `This account is linked as a ${profile.role} and cannot open the ${expectedRole} portal.`,
+                `This account is linked as a ${profile.role} and cannot open the ${expectedRole} portal. You will be redirected to the correct portal.`,
                 'Open matching portal',
-                () => window.location.assign(correctPortal),
+                async () => {
+                    try { await clerk.signOut(); } catch (_) { /* ignore */ }
+                    window.location.assign(correctPortal);
+                },
             );
             return null;
         }
