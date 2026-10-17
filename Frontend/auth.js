@@ -19,10 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const destination = isMentor ? 'mentor_index.html' : 'index.html';
     const returnTo = new URLSearchParams(window.location.search).get('redirect_url');
     const targetPage = returnTo === destination ? returnTo : destination;
-    let completingEnrollment = false;
     let currentSignupPassword = null;
     const showEnrollment = () => {
-        completingEnrollment = true;
         loginForm.style.display = 'none';
         signupForm.style.display = 'block';
         authTitle.textContent = 'Complete enrollment';
@@ -49,6 +47,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const clerkErrorMessage = (error) => {
+        if (error?.message === 'TOKEN_NOT_ACTIVE_YET') {
+            return 'The server clock has not caught up with this new session. Please try again shortly. If this continues, contact the administrator.';
+        }
         const messages = error?.errors?.map((item) => item.longMessage || item.message).filter(Boolean);
         return messages?.join('\n') || error?.message || 'Authentication failed. Please try again.';
     };
@@ -63,16 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         .join(', ');
 
     const linkProfileToPostgres = async (clerk, profile) => {
-        const token = await clerk.session?.getToken();
-        if (!token) {
-            throw new Error('Clerk signed you in, but no session token was available to save your profile.');
-        }
-
-        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/profile/link`, {
+        const response = await window.projectGuardAuthFetch(`${window.projectGuardApiBaseUrl}/api/profile/link`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify(profile),
         });
@@ -86,12 +81,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const getLinkedProfile = async (clerk) => {
-        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/me`);
+        const response = await window.projectGuardAuthFetch(`${window.projectGuardApiBaseUrl}/api/me`);
         const profile = await response.json().catch(() => ({}));
         if (!response.ok) {
             const error = new Error(profile.detail || 'Could not verify your Project Guard profile.');
             error.status = response.status;
-            if (response.status === 401) {
+            if (response.status === 401 && profile.detail !== 'TOKEN_NOT_ACTIVE_YET') {
                 await clerk.signOut();
             }
             throw error;
@@ -188,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else if (error.status === 403 && clerk.session) {
                     showEnrollment();
                 } else if (error.status === 401 || error.status === 403) {
-                    showAuthError(loginForm, error.message);
+                    showAuthError(loginForm, clerkErrorMessage(error));
                 } else {
                     throw error;
                 }

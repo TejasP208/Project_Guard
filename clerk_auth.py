@@ -46,6 +46,8 @@ def validate_production_clerk_config() -> None:
         raise RuntimeError("Production requires a Clerk pk_live_ publishable key.")
     if not secret_key.startswith("sk_live_"):
         raise RuntimeError("Production requires a Clerk sk_live_ secret key.")
+    if len(os.getenv("RATE_LIMIT_HASH_KEY", "").strip()) < 32:
+        raise RuntimeError("Production requires a separate RATE_LIMIT_HASH_KEY of at least 32 characters.")
     # Validate and require exact production HTTPS origins before serving traffic.
     _authorized_parties()
 

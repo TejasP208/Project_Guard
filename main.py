@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import math
 import os
 import sys
 import tempfile
@@ -18,6 +19,7 @@ from zipfile import BadZipFile
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, delete, func, or_
@@ -26,7 +28,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from clerk_backend_api import Clerk
 
 from axiom_ai import Chatbot_stream
-from database import SessionLocal, enable_pgvector, engine, migrate_database
+from database import SessionLocal, engine, initialize_database
 from clerk_auth import require_clerk_user_id, validate_production_clerk_config
 from mentor_roster import mentor_key, parse_mentor_roster
 from enrollment import redeem_student, redeem_mentor
@@ -44,10 +46,11 @@ from embeddings import CloudflareEmbeddingClient
 async def lifespan(_app: FastAPI):
     validate_production_clerk_config()
     _trusted_proxy_networks()
-    # Create all runtime tables in PostgreSQL only after pgvector is enabled.
-    enable_pgvector()
-    Base.metadata.create_all(bind=engine)
-    migrate_database()
+    # Fail startup with a clear error if the hosting build skipped NLTK data.
+    from nlp.preprocessor import preprocess
+    if not preprocess("Students are building projects"):
+        raise RuntimeError("NLTK preprocessing is unavailable; run build_backend.sh before starting the API.")
+    initialize_database(Base.metadata)
     yield
 
 
@@ -72,6 +75,32 @@ RATE_LIMITS = {
 }
 _plagiarism_semaphore = asyncio.Semaphore(1)
 _last_rate_cleanup = 0
+
+
+@asynccontextmanager
+async def plagiarism_slot():
+    """Permit one check across workers using a PostgreSQL session advisory lock."""
+    try:
+        await asyncio.wait_for(_plagiarism_semaphore.acquire(), timeout=2)
+    except asyncio.TimeoutError as error:
+        raise HTTPException(status_code=429, detail="Document checks are busy. Please try again shortly.", headers={"Retry-After": "15"}) from error
+    connection = None
+    locked = False
+    try:
+        if engine.dialect.name == "postgresql":
+            connection = engine.connect()
+            locked = bool(connection.exec_driver_sql("SELECT pg_try_advisory_lock(20261017, 1)").scalar_one())
+            if not locked:
+                raise HTTPException(status_code=429, detail="Document checks are busy. Please try again shortly.", headers={"Retry-After": "15"})
+        yield
+    finally:
+        try:
+            if connection is not None:
+                if locked:
+                    connection.exec_driver_sql("SELECT pg_advisory_unlock(20261017, 1)")
+                connection.close()
+        finally:
+            _plagiarism_semaphore.release()
 
 
 def _trusted_proxy_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -306,9 +335,9 @@ def delete_profile_account(clerk_user_id, profile):
     db = SessionLocal()
     try:
         if profile["role"] == "student":
-            account = db.query(Student).filter(Student.id == profile["id"] if "id" in profile else Student.clerk_user_id == clerk_user_id).first()
+            account = db.query(Student).filter(Student.clerk_user_id == clerk_user_id).first()
         else:
-            account = db.query(Mentor).filter(Mentor.id == profile["id"] if "id" in profile else Mentor.clerk_user_id == clerk_user_id).first()
+            account = db.query(Mentor).filter(Mentor.clerk_user_id == clerk_user_id).first()
         if not account:
             raise HTTPException(status_code=404, detail="Your application profile no longer exists.")
 
@@ -434,7 +463,7 @@ def _configured_origins() -> list[str]:
 
 
 async def run_plagiarism_check_with_deadline(
-    title: str, description: str, file_bytes: bytes, filename: str
+    title: str, description: str, file_bytes: bytes, filename: str, exclude_project_id: int | None = None
 ) -> dict[str, object]:
     """Run CPU/provider work in a child process that can be killed at the deadline."""
     with tempfile.TemporaryDirectory(prefix="project-guard-plagiarism-") as temp_dir:
@@ -448,6 +477,7 @@ async def run_plagiarism_check_with_deadline(
                 "description": description,
                 "filename": filename,
                 "file_path": str(upload_path),
+                "exclude_project_id": exclude_project_id,
             }),
             encoding="utf-8",
         )
@@ -779,7 +809,40 @@ def leave_team(request: Request):
         db.close()
 
 @app.post("/submit-project")
-def submit_project(data: ProjectSubmission, request: Request):
+async def submit_project(data: ProjectSubmission, request: Request):
+    roll_no = require_profile_role(request, "student")["identifier"]
+    title = data.project_name.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Project title is required.")
+    existing_id = await run_in_threadpool(_current_project_id_for_student, roll_no)
+    try:
+        async with plagiarism_slot():
+            result = await run_plagiarism_check_with_deadline(title, data.project_abstract.strip(), b"", "", existing_id)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error("Submission plagiarism check failed (%s)", type(error).__name__)
+        raise HTTPException(status_code=503, detail="The submission could not be checked right now. Please try again.") from error
+    score = result.get("plagiarism_percent")
+    if ("error" in result or isinstance(score, bool) or not isinstance(score, (int, float))
+            or not math.isfinite(score) or not 0 <= score <= 100):
+        raise HTTPException(status_code=503, detail="The submission check did not return a valid score. Please try again.")
+    if score > 30:
+        raise HTTPException(status_code=422, detail=f"Submission blocked: similarity score {score}% exceeds the 30% limit. Revise the title and abstract, then check again.")
+    return await run_in_threadpool(_save_project_submission, data, request)
+
+
+def _current_project_id_for_student(roll_no: str) -> int | None:
+    with SessionLocal() as db:
+        member = db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first()
+        if not member:
+            raise HTTPException(status_code=400, detail="You must join a team to submit a project")
+        if db.query(TeamMember).filter(TeamMember.team_id == member.team_id).count() < 2:
+            raise HTTPException(status_code=400, detail="At least two students must be in the team before submitting a project idea.")
+        return db.query(Project.id).filter(Project.team_id == member.team_id).scalar()
+
+
+def _save_project_submission(data: ProjectSubmission, request: Request):
     roll_no = require_profile_role(request, "student")["identifier"]
     db = SessionLocal()
     try:
@@ -855,15 +918,7 @@ async def check_plagiarism(
 ):
     require_profile_role(request, "student")
     try:
-        try:
-            await asyncio.wait_for(_plagiarism_semaphore.acquire(), timeout=2)
-        except asyncio.TimeoutError as error:
-            raise HTTPException(
-                status_code=429,
-                detail="Document checks are busy. Please try again shortly.",
-                headers={"Retry-After": "15"},
-            ) from error
-        try:
+        async with plagiarism_slot():
             file_bytes = await file.read(MAX_PLAGIARISM_UPLOAD_BYTES + 1) if file else b""
             if len(file_bytes) > MAX_PLAGIARISM_UPLOAD_BYTES:
                 raise HTTPException(status_code=413, detail="The uploaded file must be 20 MB or smaller.")
@@ -882,8 +937,6 @@ async def check_plagiarism(
                     if key in result
                 }
             return result
-        finally:
-            _plagiarism_semaphore.release()
     except HTTPException:
         raise
     except DocumentValidationError as e:

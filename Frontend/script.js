@@ -547,10 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnSubmit.disabled = false;
         } else {
             btnSubmit.disabled = true;
-            // Introduce a tiny delay so the UI finishes updating the score visually first
-            setTimeout(() => {
-                alert(`Plagiarism score of ${data.plagiarism_percent}% exceeds the 30% maximum limit. You are blocked from submitting this project.`);
-            }, 100);
+            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the 30% maximum. Revise the project before submitting.`);
         }
     }
 
@@ -940,7 +937,7 @@ async function submitProject() {
 
     const btnSubmit = document.getElementById("btn-submit");
     btnSubmit.disabled = true;
-    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Submitting...';
+    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Checking and submitting...';
 
     try {
         const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/submit-project`, {
@@ -959,8 +956,12 @@ async function submitProject() {
         btnSubmit.innerHTML = '<i class="ph ph-check"></i> Submitted';
         btnSubmit.style.background = "var(--status-verified)";
     } catch (err) {
-        alert("Submission failed: " + err.message);
-        btnSubmit.disabled = false;
+        const errorPanel = document.getElementById('upload-error');
+        if (errorPanel) {
+            errorPanel.textContent = `Submission failed: ${err.message}`;
+            errorPanel.hidden = false;
+        }
+        btnSubmit.disabled = /^Submission blocked:/.test(err.message);
         btnSubmit.innerHTML = '<i class="ph ph-upload-simple"></i> Submit Your Project';
     }
 }

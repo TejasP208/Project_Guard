@@ -74,8 +74,35 @@ class ClerkVerificationTests(unittest.TestCase):
             with patch.dict(os.environ, {"CLERK_AUTHORIZED_PARTIES": "https://portal.example.com", "CORS_ALLOWED_ORIGINS": "https://portal.example.com"}):
                 self.assertEqual(main._configured_origins(), ["https://portal.example.com"])
 
+    def test_production_requires_independent_rate_limit_key(self):
+        with patch.dict(os.environ, {"APP_ENV": "production", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_fixture",
+                                  "CLERK_SECRET_KEY": "sk_live_fixture", "CLERK_AUTHORIZED_PARTIES": "https://portal.example.com",
+                                  "RATE_LIMIT_HASH_KEY": ""}):
+            with self.assertRaisesRegex(RuntimeError, "RATE_LIMIT_HASH_KEY"):
+                clerk_auth.validate_production_clerk_config()
+            with patch.dict(os.environ, {"RATE_LIMIT_HASH_KEY": "a" * 32}):
+                clerk_auth.validate_production_clerk_config()
+
 
 class WorkerTransportTests(unittest.TestCase):
+    def test_shared_plagiarism_slot_rejects_busy_worker_and_unlocks(self):
+        async def run_slot():
+            async with main.plagiarism_slot():
+                return True
+        with patch.object(main, "engine") as engine:
+            engine.dialect.name = "postgresql"
+            connection = engine.connect.return_value
+            connection.exec_driver_sql.return_value.scalar_one.return_value = False
+            with self.assertRaises(HTTPException) as failure:
+                asyncio.run(run_slot())
+            self.assertEqual(failure.exception.status_code, 429)
+            connection.close.assert_called_once()
+            connection.reset_mock()
+            connection.exec_driver_sql.return_value.scalar_one.return_value = True
+            self.assertTrue(asyncio.run(run_slot()))
+            connection.exec_driver_sql.assert_any_call("SELECT pg_advisory_unlock(20261017, 1)")
+            connection.close.assert_called_once()
+
     def test_worker_exceeding_deadline_is_killed(self):
         process = MagicMock(returncode=None)
         async def communicate():

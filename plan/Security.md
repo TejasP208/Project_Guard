@@ -7,8 +7,8 @@ This is a code-based security priority list for work to complete before public d
 - [ ] **Require verified identity and ownership checks**
    - [x] Integrate Clerk authentication and verify Clerk session tokens in FastAPI.
    - [x] Take the authenticated Clerk user ID from the verified identity, not from request fields such as `roll_no` or `mentor_user`.
-   - [x] Link Clerk users to the corresponding student or mentor record in PostgreSQL. Safe enrollment of new identities against an authoritative student roster remains unresolved.
-   - [ ] Check permissions and ownership for every student, team, project, and mentor record touched by a request. Current routes have been reviewed and targeted access-control tests pass; untrusted self-registration against an arbitrary student identifier still prevents completing this item.
+   - [x] Link Clerk users to the corresponding student or mentor record in PostgreSQL. New links require administrator-issued, identity-bound enrollment codes; secure code delivery remains an operational prerequisite.
+   - [x] Check permissions and ownership for student, team, project, and mentor records touched by a request. New identities require an unused code bound to their identifier.
    - [x] Require authentication for every API route that returns or changes application data.
 
 - [ ] **Lock down endpoints and validate input**
@@ -50,7 +50,7 @@ This is a code-based security priority list for work to complete before public d
 - Added a bounded plagiarism concurrency queue and run CPU-bound checks in a child process that is killed at the 90-second deadline. Groq has a 45-second timeout with retries disabled; Cloudflare embedding requests have a 30-second timeout.
 - Replaced raw database exception responses and detailed exception logging with generic client errors and exception-type-only logs.
 - Escaped project/member data in dynamic HTML and replaced profile-avatar HTML interpolation with safe DOM construction and image type/size checks.
-- New student profile creation still accepts a self-selected roll number when no student row exists. Per the current deployment discussion, authoritative enrollment proof is deferred; revisit before public launch.
+- New student and mentor profile creation now requires an unused, unexpired administrator-issued code bound to the exact identifier. Administrators must verify the intended recipient before sharing a code.
 
 ## Team and project data workflow
 
@@ -70,7 +70,7 @@ This is a code-based security priority list for work to complete before public d
 - Mentor roster and review mutations are scoped to the authenticated mentor key. Project assignment is scoped to the authenticated mentor and refuses projects already assigned to someone else. Project data for a student's team is now hidden from another mentor's roster/dashboard responses when explicitly assigned to a different mentor.
 - Axiom now accepts a project ID and loads authorized project content from PostgreSQL instead of trusting project title, abstract, group, or year supplied by the browser. Student plagiarism responses omit matched project/team records and return only the score/risk summary.
 - Team create/join/leave and invitation accept now lock the authenticated student row; team membership/capacity writes lock the team row. This serializes the relevant writes on PostgreSQL, but existing duplicate or case-variant membership rows still need data cleanup and a database-level uniqueness constraint before this can be considered fully enforced.
-- **Blocking ownership gap:** `/api/profile/link` still permits a new Clerk identity to create a student or mentor profile using a self-selected identifier when no profile row exists. Clerk proves the caller controls that Clerk account; it does not prove the caller owns that roll number or mentor identity. Until profile creation is tied to an authoritative enrollment/mentor source or a trusted administrative linking process, an attacker can claim a fabricated student identity. This is distinct from invitation delivery and remains open.
+- **Enrollment ownership:** `/api/profile/link` now redeems a single-use, expiring administrator-issued code tied to the requested student roll number and year or mentor name. Clerk proves control of the login account; administrators remain responsible for checking identity before privately delivering each code.
 - **Project visibility policy:** only projects with an existing team relationship appear in the mentor portal. Unassigned team ideas remain available for mentor selection; assigned projects are scoped to their assigned mentor. Stale roster links that conflict with that mentor assignment are also excluded from roster, dashboard, and group-chat access.
 
 ## Project visibility and response review completed (2026-10-07)

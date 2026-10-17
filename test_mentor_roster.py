@@ -1,7 +1,7 @@
 """Roster, review and invitation regressions with trusted test profiles."""
 from io import BytesIO
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
@@ -166,14 +166,17 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual(self.call("POST", "/submit-project", role="student", user="S1", json=idea).status_code, 400)
         joined = self.call("POST", "/join-team", role="student", user="S2", json={"team_code": created.json()["team_code"]})
         self.assertEqual(joined.status_code, 200)
-        submitted = self.call("POST", "/submit-project", role="student", user="S1", json=idea)
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})):
+            submitted = self.call("POST", "/submit-project", role="student", user="S1", json=idea)
         self.assertEqual(submitted.status_code, 200)
         project_id = submitted.json()["project_id"]
         url = f"/api/projects/{project_id}/assign"
         self.assertEqual(self.call("PATCH", url).status_code, 200)
         self.assertEqual(self.call("PATCH", url, user="Dr Shah").status_code, 409)
         self.assertEqual(self.call("GET", "/api/projects", user="Dr Shah").json(), [])
-        updated = self.call("POST", "/submit-project", role="student", user="S2", json={**idea, "project_name": "Refined idea"})
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})) as check:
+            updated = self.call("POST", "/submit-project", role="student", user="S2", json={**idea, "project_name": "Refined idea"})
+        self.assertEqual(check.await_args.args[-1], project_id)
         self.assertEqual(updated.json()["project_id"], project_id)
         imported = self.upload([["Student Name", "PRN", "Project"], ["One", "S1", "Stale title"], ["Two", "S2", "Stale title"]])
         self.assertEqual(imported.status_code, 200)

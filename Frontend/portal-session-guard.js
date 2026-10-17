@@ -13,14 +13,14 @@ const getSettledSessionToken = async (clerk) => {
     // Treat the active session/token as the source of truth. `isSignedIn` is a
     // convenience state flag and can briefly lag session restoration after a
     // redirect, so it must not prevent a token request.
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
         const session = clerk.session;
         if (session && typeof session.getToken === 'function') {
             try {
                 const token = await session.getToken();
                 if (token) return token;
             } catch (error) {
-                if (attempt === 29) throw error;
+                if (attempt === 99) throw error;
             }
         }
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -72,10 +72,16 @@ window.projectGuardSessionReady = (async () => {
             return null;
         }
 
-        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await window.projectGuardAuthFetch(`${window.projectGuardApiBaseUrl}/api/me`);
         const profile = await response.json().catch(() => ({}));
+        if (response.status === 401 && profile.detail === 'TOKEN_NOT_ACTIVE_YET') {
+            showSessionError(
+                'The server clock has not caught up with this new session. Please try again shortly. If this continues, contact the administrator.',
+                'Retry',
+                () => window.location.reload(),
+            );
+            return null;
+        }
         if (response.status === 401 || response.status === 403) {
             showSessionError(
                 profile.detail || 'FastAPI rejected this Clerk session or could not find its linked application profile.',

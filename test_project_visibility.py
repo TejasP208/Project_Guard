@@ -107,11 +107,20 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertNotIn("clerk_user_id", response.json())
 
     def test_legacy_team_label_does_not_block_new_student_submission(self):
-        response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Fresh idea", "project_abstract": "Our own work"})
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})) as check:
+            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Fresh idea", "project_abstract": "Our own work"})
         self.assertEqual(response.status_code, 200)
+        check.assert_awaited_once_with("Fresh idea", "Our own work", b"", "", None)
         with self.sessions() as db:
             self.assertIsNone(db.get(Project, 7).team_id)
             self.assertEqual(db.query(Project).filter(Project.team_id == 4).one().project_name, "Fresh idea")
+
+    def test_direct_submission_is_blocked_when_similarity_is_high(self):
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 45})):
+            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Copied idea", "project_abstract": "Copied abstract"})
+        self.assertEqual(response.status_code, 422)
+        with self.sessions() as db:
+            self.assertIsNone(db.query(Project).filter(Project.team_id == 4).first())
 
     def test_plagiarism_returns_only_summary_and_denies_mentor(self):
         check = AsyncMock(return_value={

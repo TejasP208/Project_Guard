@@ -41,7 +41,7 @@ class TrainingProject(TypedDict):
     project_abstract: str | None
 
 
-def load_training_projects() -> list[TrainingProject]:
+def load_training_projects(exclude_project_id: int | None = None) -> list[TrainingProject]:
     with SessionLocal() as db:
         rows = db.execute(
             select(
@@ -50,7 +50,7 @@ def load_training_projects() -> list[TrainingProject]:
                 Project.group_no,
                 Project.project_name,
                 Project.project_abstract,
-            ).order_by(Project.id)
+            ).where(Project.id != exclude_project_id if exclude_project_id is not None else True).order_by(Project.id)
         ).all()
         return [
             {
@@ -71,7 +71,7 @@ def determine_risk(score: float) -> str:
 
 
 def run_plagiarism_check(
-    title: str, description: str, file_bytes: bytes, filename: str
+    title: str, description: str, file_bytes: bytes, filename: str, exclude_project_id: int | None = None
 ) -> dict[str, object]:
     # Extract and combine all text
     file_text = extract_text(file_bytes, filename) if file_bytes else ""
@@ -96,7 +96,7 @@ def run_plagiarism_check(
             "risk_level"        : "Unknown",
         }
 
-    projects        = load_training_projects()
+    projects        = load_training_projects(exclude_project_id)
     if not projects:
         return {
             "plagiarism_percent": 0.0,

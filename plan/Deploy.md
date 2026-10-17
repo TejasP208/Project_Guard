@@ -99,7 +99,7 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 **Clerk production settings:**
 - [ ] Create/select the Clerk production instance and use its `pk_live_` publishable key and `sk_live_` secret key.
-- [ ] Set Render environment variables: `APP_ENV=production`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_AUTHORIZED_PARTIES`, and `CORS_ALLOWED_ORIGINS`.
+- [ ] Set Render environment variables: `APP_ENV=production`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_AUTHORIZED_PARTIES`, `CORS_ALLOWED_ORIGINS`, and an independent random `RATE_LIMIT_HASH_KEY` of at least 32 characters.
 - [ ] Set both origin allowlists to the exact Cloudflare Pages production origin(s), including any custom frontend domain; use HTTPS origins without paths or wildcards.
 - [ ] Set `Frontend/deployment-config.js` to the Render API's HTTPS origin before publishing the static frontend.
 - [ ] In the Clerk production instance, configure the deployed frontend domain and its sign-in/sign-up redirect URLs. Keep the Clerk secret key only in Render's private environment settings.
@@ -110,7 +110,7 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 ### October 7 preparation and pending decisions
 
-- Student enrollment now requires an administrator-issued single-use code; see `student-enrollment.md` for private terminal commands. Mentor enrollment entitlement remains deferred and blocks public deployment. Earlier enrollment deferral is superseded for students by this implementation.
+- Student and mentor enrollment now require administrator-issued, single-use, identity-bound codes. Administrators must verify recipients and deliver codes privately; real Clerk browser flows still need deployment verification.
 - Hosting has not been created. HTTPS frontend/API URLs, live Clerk keys, exact origin allowlists, and proxy ranges remain pending. Do not substitute example domains into active configuration.
 - Use `sh build_backend.sh` as the backend build command. It installs requirements and NLTK corpora and checks preprocessing. Request workers no longer download corpora on import. Set `NLTK_DATA` to a location shared by build and runtime if the host uses separate users/directories.
 - Run `python identity_integrity.py` for a read-only identity audit. After administrator-reviewed cleanup, run `python identity_integrity.py --apply`. It locks the affected tables, audits again, and atomically adds normalized unique indexes, nonblank identity checks, and team membership/invitation foreign keys. It does not delete or choose records.

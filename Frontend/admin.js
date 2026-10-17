@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         let selectedRole = 'student';
         let records = [];
         let accounts = [];
+        let codeClearTimer;
+        const clearIssuedCode = () => {
+            clearTimeout(codeClearTimer);
+            document.getElementById('code').textContent = '';
+            document.getElementById('issued').hidden = true;
+        };
         const renderEnrollments = () => {
             const rows = document.getElementById('rows');
             rows.replaceChildren();
@@ -104,8 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('issue-title').textContent = `Create ${selectedRole} enrollment code`;
                 document.getElementById('enrollments-title').textContent = `${label} enrollment codes`;
                 document.getElementById('accounts-title').textContent = `${label} accounts`;
-                document.getElementById('issued').hidden = true;
-                document.getElementById('code').textContent = '';
+                clearIssuedCode();
                 document.querySelector('[name=roll_no]').value = '';
                 document.querySelector('[name=year]').value = '';
                 message.textContent = '';
@@ -119,8 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('issue').onsubmit = async event => {
             event.preventDefault();
             const button = event.target.querySelector('button'); button.disabled = true;
-            document.getElementById('issued').hidden = true;
-            document.getElementById('code').textContent = '';
+            clearIssuedCode();
             message.textContent = '';
             try {
                 const fields = new FormData(event.target);
@@ -128,11 +132,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     body: JSON.stringify({ role: fields.get('role'), roll_no: fields.get('roll_no'), year: roleSelect.value === 'mentor' ? '' : fields.get('year'), expires_hours: Number(fields.get('expires_hours')) }) });
                 document.getElementById('code').textContent = grant.code;
                 document.getElementById('issued').hidden = false;
+                codeClearTimer = setTimeout(() => {
+                    clearIssuedCode();
+                    message.textContent = 'The enrollment code was hidden after five minutes. Issue a new code if needed.';
+                }, 5 * 60 * 1000);
                 await refresh();
             } catch (error) { report(error); }
             finally { button.disabled = false; }
         };
         document.getElementById('copy').onclick = async () => {
+            if (!document.getElementById('code').textContent) {
+                message.textContent = 'The enrollment code is no longer displayed.';
+                return;
+            }
             try { await navigator.clipboard.writeText(document.getElementById('code').textContent); message.textContent = 'Code copied.'; }
             catch { message.textContent = 'Select the code and copy it manually.'; }
         };
