@@ -2,6 +2,20 @@
 // resolves the session subject to a linked application profile.
 document.documentElement.style.visibility = 'hidden';
 
+const portalDocumentReady = document.body ? Promise.resolve() : new Promise(resolve => {
+    document.addEventListener('DOMContentLoaded', resolve, { once: true });
+});
+
+const waitForPortalStep = (promise, message) => {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(message)), 15000);
+        }),
+    ]).finally(() => clearTimeout(timer));
+};
+
 const portalSignInPage = () => document.body.dataset.portal === 'mentor'
     ? 'mentor_auth.html'
     : 'auth.html';
@@ -13,14 +27,15 @@ const getSettledSessionToken = async (clerk) => {
     // Treat the active session/token as the source of truth. `isSignedIn` is a
     // convenience state flag and can briefly lag session restoration after a
     // redirect, so it must not prevent a token request.
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    const maxAttempts = 100; // Allow up to ten seconds for a slow Clerk session restore.
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const session = clerk.session;
         if (session && typeof session.getToken === 'function') {
             try {
                 const token = await session.getToken();
                 if (token) return token;
             } catch (error) {
-                if (attempt === 29) throw error;
+                if (attempt === maxAttempts - 1) throw error;
             }
         }
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -29,7 +44,6 @@ const getSettledSessionToken = async (clerk) => {
 };
 
 const showSessionError = (message, actionLabel, action) => {
-    document.documentElement.style.visibility = '';
     const panel = document.createElement('main');
     panel.setAttribute('role', 'alert');
     panel.style.cssText = 'max-width:36rem;margin:15vh auto;padding:2rem;font:16px/1.5 system-ui;text-align:center;background:white;border-radius:16px;color:#1f2937;box-shadow:0 12px 40px #1f293733';
@@ -46,13 +60,21 @@ const showSessionError = (message, actionLabel, action) => {
         panel.append(button);
     }
     document.body.replaceChildren(panel);
+    document.documentElement.style.visibility = '';
 };
 
 window.projectGuardSessionReady = (async () => {
     let clerk;
     try {
-        clerk = await window.projectGuardClerkReady;
-        const token = await getSettledSessionToken(clerk);
+        clerk = await waitForPortalStep(
+            window.projectGuardClerkReady,
+            'Sign-in services took too long to load. Check your connection and retry.',
+        );
+        await portalDocumentReady;
+        const token = await waitForPortalStep(
+            getSettledSessionToken(clerk),
+            'Your sign-in session took too long to restore. Retry, or sign in again.',
+        );
         if (!token) {
             console.error('No active Clerk session token on portal origin:', {
                 origin: window.location.origin,
@@ -72,10 +94,19 @@ window.projectGuardSessionReady = (async () => {
             return null;
         }
 
-        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        const profile = await response.json().catch(() => ({}));
+        const { response, profile } = await waitForPortalStep((async () => {
+            const response = await window.projectGuardAuthFetch(`${window.projectGuardApiBaseUrl}/api/me`);
+            const profile = await response.json().catch(() => ({}));
+            return { response, profile };
+        })(), 'The application server took too long to verify your profile. Check the backend and retry.');
+        if (response.status === 401 && profile.detail === 'TOKEN_NOT_ACTIVE_YET') {
+            showSessionError(
+                'The server clock has not caught up with this new session. Please try again shortly. If this continues, contact the administrator.',
+                'Retry',
+                () => window.location.reload(),
+            );
+            return null;
+        }
         if (response.status === 401 || response.status === 403) {
             showSessionError(
                 profile.detail || 'FastAPI rejected this Clerk session or could not find its linked application profile.',
@@ -98,9 +129,12 @@ window.projectGuardSessionReady = (async () => {
         if (profile.role !== expectedRole) {
             const correctPortal = profile.role === 'mentor' ? 'mentor_index.html' : 'index.html';
             showSessionError(
-                `This account is linked as a ${profile.role} and cannot open the ${expectedRole} portal.`,
+                `This account is linked as a ${profile.role} and cannot open the ${expectedRole} portal. You will be redirected to the correct portal.`,
                 'Open matching portal',
-                () => window.location.assign(correctPortal),
+                async () => {
+                    try { await clerk.signOut(); } catch (_) { /* ignore */ }
+                    window.location.assign(correctPortal);
+                },
             );
             return null;
         }
@@ -110,7 +144,12 @@ window.projectGuardSessionReady = (async () => {
         return clerk;
     } catch (error) {
         console.error('Could not verify Clerk session with FastAPI:', error);
-        showSessionError(error.message || 'We could not verify your Clerk session with the server. Check the API connection and try again.');
+        await portalDocumentReady;
+        showSessionError(
+            error.message || 'We could not verify your Clerk session with the server. Check the API connection and try again.',
+            'Retry',
+            () => window.location.reload(),
+        );
         return null;
     }
 })();

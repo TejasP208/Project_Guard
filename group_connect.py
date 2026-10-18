@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from mentor_roster import mentor_key
 from models import GroupMessage, Mentor, MentorReview, MentorStudent, Student
@@ -24,6 +24,13 @@ class MessageRequest(BaseModel):
 
 def room_id(key, number):
     return json.dumps([key, number.strip().casefold()], ensure_ascii=False, separators=(",", ":"))
+
+
+def lock_roster_for_message_access(db):
+    # A full sheet import rotates rooms when membership changes. Keep the
+    # authorization check and message read/write in the same roster version.
+    if db.bind.dialect.name == "postgresql":
+        db.execute(text("LOCK TABLE mentor_students IN SHARE MODE"))
 
 
 def assigned_rooms(db, role, user):
@@ -97,6 +104,7 @@ def create_router(session_factory):
     def get_messages(request: Request, group_id: Annotated[str, Query(min_length=1, max_length=200)]):
         role, user = verified_identity(request)
         with session_factory() as db:
+            lock_roster_for_message_access(db)
             groups, _, _ = assigned_rooms(db, role, user)
             if not any(group["id"] == group_id for group in groups):
                 raise HTTPException(403, "You are not assigned to this group.")
@@ -114,6 +122,7 @@ def create_router(session_factory):
         if link and not re.fullmatch(r"https://meet\.google\.com/[a-z]{3}-[a-z]{4}-[a-z]{3}", link):
             raise HTTPException(400, "Paste a valid Google Meet link, such as https://meet.google.com/abc-defg-hij.")
         with session_factory() as db:
+            lock_roster_for_message_access(db)
             groups, account, name = assigned_rooms(db, role, user)
             if not any(group["id"] == data.group_id for group in groups):
                 raise HTTPException(403, "You are not assigned to this group.")

@@ -13,9 +13,12 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="style.css?v=account-actions-2">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="feedback.css">
+    <script src="feedback.js?v=accessible-feedback-1" defer></script>
     <script src="deployment-config.js"></script>
-    <script src="clerk-config.js?v=clerk-token-2"></script>
-    <script src="portal-session-guard.js?v=clerk-guard-7"></script>
+    <script src="clerk-config.js?v=portal-startup-3"></script>
+    <script src="auth-retry.js?v=clock-retry-1"></script>
+    <script src="portal-session-guard.js?v=portal-startup-3"></script>
 </head>
 
 <body>
@@ -172,6 +175,8 @@
 
                         <form id="submission-form" class="submission-form">
 
+                            <p id="project-review-status" class="project-review-status" role="status" hidden></p>
+
                             <!-- Inputs -->
                             <div class="form-group">
                                 <label for="project-title">Project Title</label>
@@ -307,6 +312,10 @@
                                 <label for="team-max">Max Members</label>
                                 <input type="number" id="team-max" value="4" min="2" max="10">
                             </div>
+                            <div class="form-group">
+                                <label for="team-github">GitHub repository (optional)</label>
+                                <input type="url" id="team-github" placeholder="https://github.com/owner/repository">
+                            </div>
                             <div class="form-actions">
                                 <button type="button" class="btn btn-secondary" id="cancel-create-team">Cancel</button>
                                 <button type="submit" class="btn btn-primary">
@@ -350,6 +359,14 @@
 
                 <!-- Team Roster Card (shown after joining/creating) -->
                 <div id="team-roster-card" class="card glass-card team-roster hidden">
+                    <form id="team-github-form" class="team-form" style="margin: 0 0 1rem;">
+                        <label for="roster-github-url">GitHub repository</label>
+                        <div class="form-actions">
+                            <input type="url" id="roster-github-url" placeholder="https://github.com/owner/repository" style="flex: 1;">
+                            <button type="submit" class="btn btn-secondary">Save link</button>
+                        </div>
+                        <span id="team-github-status" role="status" aria-live="polite"></span>
+                    </form>
                     <div class="roster-top-bar">
                         <div class="roster-team-label" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
@@ -585,7 +602,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=project-visibility-1"></script>
+    <script src="script.js?v=project-review-status-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
     <script src="group_connect.js?v=project-visibility-1"></script>
 </body>

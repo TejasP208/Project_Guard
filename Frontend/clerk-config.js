@@ -47,6 +47,10 @@ window.projectGuardClerkReady = (async () => {
     await loadScript(`https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, {
         "data-clerk-publishable-key": publishableKey,
     });
+    // Dashboard pages load this file in <head>, before <body> is available.
+    if (!document.body) {
+        await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
     const loadOptions = {};
     if (document.body.dataset.clerkUi === 'true') {
         await loadScript(`https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`);

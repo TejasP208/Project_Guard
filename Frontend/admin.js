@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         let selectedRole = 'student';
         let records = [];
         let accounts = [];
+        let codeClearTimer;
+        const clearIssuedCode = () => {
+            clearTimeout(codeClearTimer);
+            document.getElementById('code').textContent = '';
+            document.getElementById('issued').hidden = true;
+        };
         const renderEnrollments = () => {
             const rows = document.getElementById('rows');
             rows.replaceChildren();
@@ -26,7 +32,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const row = document.createElement('tr');
                 const expired = record.expires_at * 1000 <= Date.now();
                 const status = record.used_at ? 'Used' : record.revoked_at ? 'Revoked' : expired ? 'Expired' : 'Available';
-                for (const value of [record.id, record.role, record.roll_no, record.year, new Date(record.expires_at * 1000).toLocaleString(), status]) {
+                const verificationLabels = {
+                    official_roster: 'Official records',
+                    institutional_contact: 'Institutional contact',
+                    in_person: 'In person with ID'
+                };
+                for (const value of [record.id, record.role, record.roll_no, record.year,
+                    new Date(record.expires_at * 1000).toLocaleString(), status,
+                    record.issued_by_clerk_user_id || 'Legacy',
+                    verificationLabels[record.verification_method] || 'Not recorded']) {
                     const cell = document.createElement('td'); cell.textContent = String(value); row.append(cell);
                 }
                 const action = document.createElement('td');
@@ -43,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (!visible.length) {
                 const row = document.createElement('tr');
-                const cell = document.createElement('td'); cell.colSpan = 7;
+                const cell = document.createElement('td'); cell.colSpan = 9;
                 cell.textContent = `No ${selectedRole} enrollment codes found.`; row.append(cell); rows.append(row);
             }
         };
@@ -73,7 +87,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cell = document.createElement('td');
                 const button = document.createElement('button'); button.textContent = 'Delete account';
                 button.onclick = async () => {
-                    if (!window.confirm(`Delete ${account.role} account ${account.identifier}? This permanently removes the login and profile.`)) return;
+                    if (!await window.projectGuardFeedback.confirm(`Delete ${account.role} account ${account.identifier}? This permanently removes the login and profile.`, {
+                        title: 'Delete account', confirmLabel: 'Delete account'
+                    })) return;
                     button.disabled = true;
                     try {
                         await request(`/accounts/${account.role}/${account.id}`, { method: 'DELETE' });
@@ -104,8 +120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('issue-title').textContent = `Create ${selectedRole} enrollment code`;
                 document.getElementById('enrollments-title').textContent = `${label} enrollment codes`;
                 document.getElementById('accounts-title').textContent = `${label} accounts`;
-                document.getElementById('issued').hidden = true;
-                document.getElementById('code').textContent = '';
+                clearIssuedCode();
                 document.querySelector('[name=roll_no]').value = '';
                 document.querySelector('[name=year]').value = '';
                 message.textContent = '';
@@ -119,20 +134,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('issue').onsubmit = async event => {
             event.preventDefault();
             const button = event.target.querySelector('button'); button.disabled = true;
-            document.getElementById('issued').hidden = true;
-            document.getElementById('code').textContent = '';
+            clearIssuedCode();
             message.textContent = '';
             try {
                 const fields = new FormData(event.target);
                 const grant = await request('/enrollments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ role: fields.get('role'), roll_no: fields.get('roll_no'), year: roleSelect.value === 'mentor' ? '' : fields.get('year'), expires_hours: Number(fields.get('expires_hours')) }) });
+                    body: JSON.stringify({ role: fields.get('role'), roll_no: fields.get('roll_no'),
+                        year: roleSelect.value === 'mentor' ? '' : fields.get('year'),
+                        expires_hours: Number(fields.get('expires_hours')),
+                        verification_method: fields.get('verification_method'),
+                        recipient_verified: fields.get('recipient_verified') === 'on' }) });
                 document.getElementById('code').textContent = grant.code;
                 document.getElementById('issued').hidden = false;
+                codeClearTimer = setTimeout(() => {
+                    clearIssuedCode();
+                    message.textContent = 'The enrollment code was hidden after five minutes. Issue a new code if needed.';
+                }, 5 * 60 * 1000);
                 await refresh();
             } catch (error) { report(error); }
-            finally { button.disabled = false; }
+            finally {
+                button.disabled = false;
+                event.target.elements.recipient_verified.checked = false;
+            }
         };
         document.getElementById('copy').onclick = async () => {
+            if (!document.getElementById('code').textContent) {
+                message.textContent = 'The enrollment code is no longer displayed.';
+                return;
+            }
             try { await navigator.clipboard.writeText(document.getElementById('code').textContent); message.textContent = 'Code copied.'; }
             catch { message.textContent = 'Select the code and copy it manually.'; }
         };

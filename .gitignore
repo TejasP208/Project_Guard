@@ -9,6 +9,7 @@ __pycache__/
 # Local virtual environments
 venv/
 .venv/
+dist/
 
 # macOS-generated metadata
 .DS_Store

@@ -43,9 +43,17 @@ text to its first 500 normalized characters before chunking, so longer uploads
 are not fully covered yet. `embed_many(texts)` batches up to eight texts per
 Cloudflare request and returns one vector for each input in order.
 
-The combined TF-IDF/Qwen score and 30% frontend cutoff are provisional. To
-evaluate them, fill a copy of `labeled_cases.csv` with real submissions and
-run `python -m embeddings.calibrate path/to/labeled_cases.csv`.
+The combined TF-IDF/Qwen score (60%/40%) is provisional. No hard submission
+cutoff is active by default: the old 30% cutoff was not supported by labeled
+cases and could reject legitimate work. `/check-plagiarism` reports the score
+as advisory. After collecting representative labeled cases, run
+`python -m embeddings.calibrate path/to/labeled_cases.csv`; it requires at
+least 10 similar and 10 unrelated examples and evaluates the current configured
+weights and candidate cutoffs. Treat that result as exploratory, review errors
+on separate held-out cases, and document the chosen weights and cutoff before
+setting `ORIGINALITY_BLOCK_THRESHOLD` (a number from 0 to 100) in the backend
+environment. The script does not optimize weights, so the weights still need
+separate evidence and review before enabling a hard block.
 
 To try it manually after adding the two values to `.env`:
 

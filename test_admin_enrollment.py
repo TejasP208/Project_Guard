@@ -30,11 +30,17 @@ class AdminEnrollmentTests(unittest.TestCase):
         self.addCleanup(self.engine.dispose)
 
     def issue(self, role='mentor'):
-        return main.issue_enrollment(main.AdminEnrollmentRequest(role=role, roll_no=' Mentor1 ', year='Y1'), self.request)
+        return main.issue_enrollment(main.AdminEnrollmentRequest(
+            role=role, roll_no=' Mentor1 ', year='Y1', verification_method='institutional_contact',
+            recipient_verified=True,
+        ), self.request)
 
     def test_mentor_code_required_and_bound_to_role_name_and_single_use(self):
         grant = self.issue()
         with self.sessions() as db:
+            audit = db.get(EnrollmentCode, grant['id'])
+            self.assertEqual(audit.issued_by_clerk_user_id, 'admin')
+            self.assertEqual(audit.verification_method, 'institutional_contact')
             for name in ('Other mentor',):
                 with self.assertRaises(HTTPException):
                     redeem_mentor(db, 'user1', name, grant['code'])
@@ -65,7 +71,9 @@ class AdminEnrollmentTests(unittest.TestCase):
             self.assertEqual(failure.exception.status_code, 403)
         self.request.state.clerk_user_id = 'admin'
         with self.assertRaises(HTTPException):
-            main.issue_enrollment(main.AdminEnrollmentRequest(roll_no='S1', year=' '), self.request)
+            main.issue_enrollment(main.AdminEnrollmentRequest(
+                roll_no='S1', year=' ', verification_method='official_roster', recipient_verified=True,
+            ), self.request)
 
     def test_admin_deletes_both_roles_and_preserves_profile_on_clerk_failure(self):
         with self.sessions() as db:
@@ -85,13 +93,14 @@ class AdminEnrollmentTests(unittest.TestCase):
 
     def test_unlinked_legacy_profile_can_be_deleted_without_clerk_configuration(self):
         with self.sessions() as db:
-            db.add(Mentor(id=1, username='Legacy mentor'))
+            db.add_all([Mentor(id=1, username='Other legacy mentor'), Mentor(id=2, username='Legacy mentor')])
             db.commit()
         with patch.dict(os.environ, {'CLERK_SECRET_KEY': ''}), patch.object(main, 'Clerk') as clerk:
-            main.delete_admin_account('mentor', 1, self.request)
+            main.delete_admin_account('mentor', 2, self.request)
             clerk.assert_not_called()
         with self.sessions() as db:
-            self.assertIsNone(db.get(Mentor, 1))
+            self.assertIsNotNone(db.get(Mentor, 1))
+            self.assertIsNone(db.get(Mentor, 2))
 
     def test_admin_cannot_delete_own_profile(self):
         with self.sessions() as db:

@@ -1,0 +1,48 @@
+main {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 24px;
+}
+
+section {
+    margin: 20px 0;
+    padding: 24px;
+    border-radius: 16px;
+    background: white;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+td,
+th {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}
+
+input,
+button {
+    margin: 6px;
+    padding: 10px;
+}
+
+button[aria-pressed="true"] {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: white;
+}
+
+#issued {
+    overflow-wrap: anywhere;
+}
+
+#message {
+    color: #b42318;
+}
+
+.admin-table-scroll {
+    overflow-x: auto;
+}

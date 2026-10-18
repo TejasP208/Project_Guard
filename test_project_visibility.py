@@ -73,11 +73,43 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual({row["id"] for row in response.json()}, {3, 4})
         for row in response.json():
-            self.assertEqual(set(row), {"id", "year", "group_no", "project_name", "team", "assigned_to_me", "can_assign"})
+            self.assertEqual(set(row), {"id", "year", "group_no", "project_name", "team", "assigned_to_me", "can_assign", "submission_status"})
         other = self.client.get("/api/projects", headers=self.headers("mentor:mentor2")).json()
         self.assertEqual({row["id"] for row in other}, {3, 5})
         self.assertEqual(self.client.get("/api/projects").status_code, 401)
         self.assertEqual(self.client.get("/api/projects", headers=self.headers("student:S1")).status_code, 403)
+
+    def test_project_details_follow_the_same_mentor_visibility_rules(self):
+        with self.sessions() as db:
+            db.add(TeamMember(team_id=2, roll_no="M1"))
+            db.commit()
+        open_project = self.client.get("/api/projects/3", headers=self.headers())
+        self.assertEqual(open_project.status_code, 200)
+        self.assertTrue(open_project.json()["can_assign"])
+        own_project = self.client.get("/api/projects/4", headers=self.headers())
+        self.assertEqual(own_project.status_code, 200)
+        self.assertEqual(own_project.json()["project_abstract"], "Verified private context")
+        self.assertEqual(own_project.json()["members"], ["M1"])
+        for project_id in (1, 2, 5, 6, 7):
+            self.assertEqual(self.client.get(f"/api/projects/{project_id}", headers=self.headers()).status_code, 404)
+        self.assertEqual(self.client.get("/api/projects/4", headers=self.headers("student:S1")).status_code, 403)
+
+    def test_team_member_can_save_github_link_visible_in_mentor_roster(self):
+        with self.sessions() as db:
+            db.add(MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student One",
+                                 prn="S1", group_name="4"))
+            db.commit()
+        url = "https://github.com/example/project-guard"
+        response = self.client.patch("/my-team/github", headers=self.headers("student:S1"), json={"github_url": url})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["github_url"], url)
+        roster = self.client.get("/mentor/students", headers=self.headers()).json()
+        self.assertEqual(roster[0]["github_url"], url)
+        invalid = self.client.patch("/my-team/github", headers=self.headers("student:S1"),
+                                    json={"github_url": "https://github.com.evil.example/a/b"})
+        self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(self.client.patch("/my-team/github", headers=self.headers(),
+                                           json={"github_url": url}).status_code, 403)
 
     def test_axiom_rejects_legacy_orphan_other_owner_and_spoofed_context(self):
         for project_id in (1, 2, 5, 6, 7):
@@ -94,6 +126,21 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertEqual(response.text, "Reviewed")
         self.assertIn("Verified private context", prompts[0])
 
+    def test_axiom_closes_database_session_on_rejected_project(self):
+        closed = []
+        def tracked_session():
+            db = self.sessions()
+            original_close = db.close
+            def close():
+                closed.append(True)
+                original_close()
+            db.close = close
+            return db
+        with patch.object(main, "SessionLocal", side_effect=tracked_session):
+            response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": 999, "question": "Review"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(closed, [True])
+
     def test_pending_invitation_omits_join_code_and_profile_link_omits_subject(self):
         invitations = self.client.get("/team-invitations", headers=self.headers("student:S1")).json()
         self.assertEqual(set(invitations[0]), {"id", "team_name", "inviter_roll_no"})
@@ -106,12 +153,110 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("clerk_user_id", response.json())
 
-    def test_legacy_team_label_does_not_block_new_student_submission(self):
-        response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Fresh idea", "project_abstract": "Our own work"})
+    def test_accepting_invitation_moves_student_without_moving_old_project(self):
+        with self.sessions() as db:
+            db.add(MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student 1", prn="S1", group_name="Old"))
+            db.commit()
+        response = self.client.patch(
+            "/team-invitations/1", headers=self.headers("student:S1"), json={"action": "accept"}
+        )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "accepted")
+        with self.sessions() as db:
+            memberships = db.query(TeamMember).filter(TeamMember.roll_no == "S1").all()
+            self.assertEqual([row.team_id for row in memberships], [1])
+            self.assertEqual(db.get(Project, 4).team_id, 2)
+            self.assertEqual(db.get(TeamInvitation, 1).status, "accepted")
+            self.assertIsNone(db.query(MentorStudent).filter(MentorStudent.prn == "S1").first())
+
+    def test_accepting_invitation_updates_roster_for_destination_mentor(self):
+        with self.sessions() as db:
+            db.add_all([
+                MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student 1", prn="S1"),
+                TeamInvitation(team_id=3, inviter_roll_no="S9", invitee_roll_no="S1", status="pending", created_at="2026-10-18"),
+            ])
+            db.commit()
+            invitation_id = db.query(TeamInvitation.id).filter(TeamInvitation.team_id == 3).scalar()
+        response = self.client.patch(
+            f"/team-invitations/{invitation_id}", headers=self.headers("student:S1"), json={"action": "accept"}
+        )
+        self.assertEqual(response.status_code, 200)
+        with self.sessions() as db:
+            entry = db.query(MentorStudent).filter(MentorStudent.prn == "S1").one()
+            self.assertEqual((entry.mentor_key, entry.project_name), ("mentor2", "Other project"))
+            self.assertEqual([row.team_id for row in db.query(TeamMember).filter(TeamMember.roll_no == "S1")], [3])
+
+    def test_invitation_can_be_sent_to_student_in_another_team(self):
+        with self.sessions() as db:
+            db.add_all([Student(roll_no="S3"), TeamMember(team_id=1, roll_no="S3")])
+            db.commit()
+        response = self.client.post(
+            "/team-invitations", headers=self.headers("student:S3"),
+            json={"invitee_roll_no": "S2"},
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_legacy_team_label_does_not_block_new_student_submission(self):
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})) as check:
+            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Fresh idea", "project_abstract": "Our own work"})
+        self.assertEqual(response.status_code, 200)
+        check.assert_awaited_once_with("Fresh idea", "Our own work", b"", "", None)
         with self.sessions() as db:
             self.assertIsNone(db.get(Project, 7).team_id)
             self.assertEqual(db.query(Project).filter(Project.team_id == 4).one().project_name, "Fresh idea")
+
+    def test_direct_submission_is_blocked_when_similarity_is_high(self):
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 45})):
+            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Copied idea", "project_abstract": "Copied abstract"})
+        self.assertEqual(response.status_code, 422)
+        with self.sessions() as db:
+            self.assertIsNone(db.query(Project).filter(Project.team_id == 4).first())
+
+    def test_mentor_rejection_preserves_submission_and_student_resubmit_reopens_it(self):
+        with self.sessions() as db:
+            db.add_all([Student(roll_no="S3"), Student(roll_no="S4"),
+                        TeamMember(team_id=1, roll_no="S3"), TeamMember(team_id=1, roll_no="S4")])
+            project = db.get(Project, 3)
+            project.project_name = "Original idea"
+            project.project_abstract = "Original abstract"
+            db.commit()
+
+        rejected = self.client.patch("/api/projects/3/reject", headers=self.headers())
+        self.assertEqual(rejected.status_code, 200)
+        self.assertIn("can edit and resubmit", rejected.json()["message"])
+        self.assertNotIn(3, {row["id"] for row in self.client.get("/api/projects", headers=self.headers()).json()})
+        student_team = self.client.get("/get-student-team", headers=self.headers("student:S3"))
+        self.assertEqual(student_team.json()["submission_status"], "rejected")
+        with self.sessions() as db:
+            project = db.get(Project, 3)
+            self.assertEqual((project.project_name, project.project_abstract), ("Original idea", "Original abstract"))
+            self.assertEqual(project.submission_status, "rejected")
+            self.assertIsNone(project.assigned_mentor_id)
+            self.assertIsNone(project.group_no)
+            self.assertEqual(db.query(MentorStudent).count(), 0)
+
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})):
+            resubmitted = self.client.post("/submit-project", headers=self.headers("student:S3"), json={
+                "project_name": "Revised idea", "project_abstract": "Revised abstract"
+            })
+        self.assertEqual(resubmitted.status_code, 200)
+        with self.sessions() as db:
+            project = db.get(Project, 3)
+            self.assertEqual((project.project_name, project.project_abstract, project.submission_status),
+                             ("Revised idea", "Revised abstract", "pending"))
+            self.assertIsNone(project.rejected_by_mentor_id)
+            self.assertIsNone(project.rejected_at)
+        self.assertIn(3, {row["id"] for row in self.client.get("/api/projects", headers=self.headers()).json()})
+
+    def test_mentor_cannot_reject_another_mentor_accepted_project(self):
+        response = self.client.patch("/api/projects/5/reject", headers=self.headers("mentor:mentor1"))
+        self.assertEqual(response.status_code, 409)
+        with self.sessions() as db:
+            self.assertEqual(db.get(Project, 5).assigned_mentor_id, 2)
+
+    def test_student_cannot_reject_project_submission(self):
+        response = self.client.patch("/api/projects/3/reject", headers=self.headers("student:S1"))
+        self.assertEqual(response.status_code, 403)
 
     def test_plagiarism_returns_only_summary_and_denies_mentor(self):
         check = AsyncMock(return_value={

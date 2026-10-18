@@ -10,12 +10,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css?v=account-actions-2">
+    <link rel="stylesheet" href="mentor_sytle.css?v=project-details-4">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="feedback.css">
+    <script src="feedback.js?v=accessible-feedback-1" defer></script>
     <script src="group_connect.js?v=project-visibility-1" defer></script>
     <script src="deployment-config.js"></script>
-    <script src="clerk-config.js?v=clerk-token-2"></script>
-    <script src="portal-session-guard.js?v=clerk-guard-7"></script>
+    <script src="clerk-config.js?v=portal-startup-3"></script>
+    <script src="auth-retry.js?v=clock-retry-1"></script>
+    <script src="portal-session-guard.js?v=portal-startup-3"></script>
 </head>
 <body data-portal="mentor">
     <div class="app-container">
@@ -142,73 +145,48 @@
 
             <!-- View: Project List -->
             <div id="view-project-list" class="content-view hidden">
+                <p id="project-list-feedback" class="student-roster-error" role="alert" aria-live="polite"></p>
                 <div class="glass-card mentor-table-card">
                     <div class="table-header-bar">
-                        <h3><i class="ph ph-folder-open"></i> All Projects</h3>
+                        <h3><i class="ph ph-users-three"></i> My Assigned Groups</h3>
                         <div class="table-search">
                             <i class="ph ph-magnifying-glass"></i>
                             <input type="text" placeholder="Search projects..." id="project-search">
                         </div>
                     </div>
                     <div class="table-wrapper">
-                        <table class="mentor-table">
+                        <table class="mentor-table" id="assigned-projects-table">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Project Name</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="3">Loading assigned groups…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="glass-card mentor-table-card" style="margin-top: 24px;">
+                    <div class="table-header-bar">
+                        <h3><i class="ph ph-clock"></i> Submitted — Awaiting Acceptance</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="mentor-table" id="pending-projects-table">
                             <thead>
                                 <tr>
                                     <th>Project Title</th>
-                                    <th>Group</th>
-                                    <th>Students</th>
-                                    <th>Status</th>
-                                    <th>Last Updated</th>
+                                    <th>Team</th>
+                                    <th>Year</th>
+                                    <th>Details</th>
                                     <th>Action</th>
                                     <th>AI Assist</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td class="project-name">AI-Based Plagiarism Detector</td>
-                                    <td>Group A</td>
-                                    <td>Ravi, Priya, Amit</td>
-                                    <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Approved</span></td>
-                                    <td>Apr 7, 2026</td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="project-name">Smart Attendance System</td>
-                                    <td>Group B</td>
-                                    <td>Anika, Rohan, Sneha</td>
-                                    <td><span class="chip checking"><i class="ph-fill ph-hourglass"></i> In Review</span></td>
-                                    <td>Apr 6, 2026</td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="project-name">E-Commerce Platform</td>
-                                    <td>Group C</td>
-                                    <td>Meera, Karan, Dev</td>
-                                    <td><span class="chip pending"><i class="ph-fill ph-clock"></i> Pending</span></td>
-                                    <td>Apr 5, 2026</td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="project-name">Healthcare Chatbot</td>
-                                    <td>Group D</td>
-                                    <td>Pooja, Varun, Nikhil</td>
-                                    <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Approved</span></td>
-                                    <td>Apr 4, 2026</td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                                </tr>
-                                <tr>
-                                    <td class="project-name">Budget Tracker App</td>
-                                    <td>Group E</td>
-                                    <td>Sanya, Jay, Tina</td>
-                                    <td><span class="chip pending"><i class="ph-fill ph-clock"></i> Pending</span></td>
-                                    <td>Apr 3, 2026</td>
-                                    <td><button class="btn-table-action"><i class="ph ph-eye"></i> View</button></td>
-                                    <td><button class="btn-axiom-ai"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                                </tr>
+                                <tr><td colspan="6">Loading submitted projects…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -220,7 +198,7 @@
                 <div class="glass-card student-upload-card">
                     <div class="upload-card-header">
                         <h3><i class="ph ph-upload-simple"></i> Import Students</h3>
-                        <span class="upload-hint">Excel columns: Student Name, Mentor Name, PRN (optional), Group (optional)</span>
+                        <span class="upload-hint">Use “Replace All Teams” for the complete Group no / Rollno / Name / Finalized idea / Guide sheet.</span>
                     </div>
                     <label for="upload-students-file" class="student-drop-zone" id="student-drop-zone">
                         <input type="file" id="upload-students-file" accept=".xlsx" hidden />
@@ -244,11 +222,15 @@
                         <button id="add-students-btn" class="btn btn-primary upload-submit-btn" disabled>
                             <i class="ph ph-user-plus"></i> Add Students
                         </button>
+                        <button id="replace-teams-btn" class="btn btn-secondary upload-submit-btn" type="button" disabled>
+                            <i class="ph ph-arrows-clockwise"></i> Replace All Teams
+                        </button>
                         <button id="add-manual-student-btn" class="btn btn-secondary upload-submit-btn" type="button">
                             <i class="ph ph-pencil-simple"></i> Add Manually
                         </button>
                         <div id="student-import-status" class="student-import-status hidden" role="status" aria-live="polite"></div>
                     </div>
+                    <div id="team-import-conflicts" class="hidden" aria-label="Resolve duplicate student IDs"></div>
                 </div>
 
                 <div class="glass-card mentor-table-card">
@@ -381,6 +363,47 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Project details -->
+    <div class="review-modal-overlay" id="project-details-modal" role="dialog" aria-modal="true" aria-labelledby="project-details-title">
+        <div class="review-modal glass-card project-details-modal">
+            <div class="modal-header">
+                <h2 id="project-details-title">Project details</h2>
+                <button class="modal-close-btn" id="project-details-close" type="button" aria-label="Close project details"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="project-details-body">
+                <p id="project-details-status" class="project-details-status"></p>
+                <dl class="project-details-grid">
+                    <div><dt>Group number</dt><dd id="project-details-group"></dd></div>
+                    <div><dt>Academic year</dt><dd id="project-details-year"></dd></div>
+                    <div class="project-details-wide"><dt>Team</dt><dd id="project-details-team"></dd></div>
+                    <div class="project-details-wide"><dt>Students</dt><dd id="project-details-members"></dd></div>
+                </dl>
+                <section class="project-details-section">
+                    <h3><i class="ph ph-folder-open" aria-hidden="true"></i> Project name</h3>
+                    <p id="project-details-project-name"></p>
+                </section>
+                <section class="project-details-section">
+                    <h3><i class="ph ph-list-checks" aria-hidden="true"></i> Progress</h3>
+                    <ul id="project-details-checklist" class="project-details-checklist"></ul>
+                </section>
+                <section class="project-details-section">
+                    <h3><i class="ph ph-github-logo" aria-hidden="true"></i> GitHub repository</h3>
+                    <p id="project-details-github">Not added yet</p>
+                </section>
+                <section class="project-details-section">
+                    <h3><i class="ph ph-text-align-left" aria-hidden="true"></i> Abstract</h3>
+                    <p id="project-details-abstract" class="project-details-abstract"></p>
+                </section>
+                <p id="project-details-error" class="student-roster-error" role="alert"></p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="project-details-dismiss" type="button">Close</button>
+                <button class="btn btn-danger hidden" id="project-details-reject" type="button">Reject submission</button>
+                <button class="btn btn-primary hidden" id="project-details-accept" type="button">Accept this project</button>
+            </div>
         </div>
     </div>
 
@@ -538,7 +561,7 @@
                 if (file) {
                     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
                         picInput.value = '';
-                        window.alert('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.');
+                        window.projectGuardFeedback.notify('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.', 'error');
                         return;
                     }
                     const reader = new FileReader();
@@ -636,54 +659,200 @@
             // Load Projects from API
             // ============================================
             let projectCatalog = new Map();
+            let rosterProjectCatalog = new Map();
+            const projectDetailsModal = document.getElementById('project-details-modal');
+            const projectDetailsAccept = document.getElementById('project-details-accept');
+            const projectDetailsReject = document.getElementById('project-details-reject');
+
+            async function rejectProject(projectId, button) {
+                const confirmed = await window.projectGuardFeedback.confirm(
+                    'Reject this submission? The team’s project details will be kept, and they can edit and resubmit before a mentor accepts it.',
+                    { title: 'Reject project submission', confirmLabel: 'Reject submission' }
+                );
+                if (!confirmed) return;
+                button.disabled = true;
+                document.getElementById('project-details-error').textContent = '';
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reject`, { method: 'PATCH' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not reject project.');
+                    projectDetailsModal.classList.remove('active');
+                    window.projectGuardFeedback.notify(result.message || 'Project submission rejected.', 'success');
+                    await Promise.all([loadProjects(), loadStudents(), loadAssignedGroups(), loadDashboard()]);
+                } catch (error) {
+                    document.getElementById('project-details-error').textContent = error.message || 'Could not reject project.';
+                    button.disabled = false;
+                }
+            }
+
+            async function acceptProject(projectId, button) {
+                button.disabled = true;
+                document.getElementById('project-list-feedback').textContent = '';
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/assign`, { method: 'PATCH' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not accept project.');
+                    projectDetailsModal.classList.remove('active');
+                    await Promise.all([loadProjects(), loadStudents(), loadAssignedGroups(), loadDashboard()]);
+                } catch (error) {
+                    document.getElementById('project-details-error').textContent = error.message || 'Could not accept project.';
+                    document.getElementById('project-list-feedback').textContent = error.message || 'Could not accept project.';
+                    button.disabled = false;
+                }
+            }
+
+            async function openProjectDetails(projectId) {
+                const error = document.getElementById('project-details-error');
+                error.textContent = '';
+                document.getElementById('project-details-title').textContent = 'Loading project…';
+                for (const id of ['team', 'group', 'year', 'members', 'abstract', 'status', 'project-name', 'checklist']) {
+                    document.getElementById(`project-details-${id}`).textContent = '';
+                }
+                document.getElementById('project-details-github').replaceChildren('Not added yet');
+                projectDetailsAccept.classList.add('hidden');
+                projectDetailsReject.classList.add('hidden');
+                projectDetailsModal.classList.add('active');
+                try {
+                    let project = rosterProjectCatalog.get(String(projectId));
+                    if (!project) {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}`);
+                        project = await response.json();
+                        if (!response.ok) throw new Error(typeof project.detail === 'string' ? project.detail : 'Could not load project.');
+                    }
+                    document.getElementById('project-details-title').textContent = project.project_name || 'Not yet assigned';
+                    document.getElementById('project-details-status').textContent = project.roster_only ? 'Assigned in mentor roster' : project.can_assign ? 'Submitted · Awaiting acceptance' : 'Assigned to you';
+                    document.getElementById('project-details-team').textContent = project.team || '—';
+                    document.getElementById('project-details-group').textContent = project.group_no || 'Assigned after acceptance';
+                    document.getElementById('project-details-year').textContent = project.year || '—';
+                    document.getElementById('project-details-members').textContent = project.members.length ? project.members.join(', ') : 'No current members';
+                    document.getElementById('project-details-project-name').textContent = project.project_name || 'Not yet assigned';
+                    if (project.github_url) {
+                        const url = new URL(project.github_url);
+                        if (url.protocol === 'https:' && url.hostname === 'github.com') {
+                            const link = document.createElement('a');
+                            link.href = url.href;
+                            link.target = '_blank';
+                            link.rel = 'noopener noreferrer';
+                            link.textContent = project.github_url;
+                            document.getElementById('project-details-github').replaceChildren(link);
+                        }
+                    }
+                    const checklist = document.getElementById('project-details-checklist');
+                    const steps = [
+                        ['Team assigned', true],
+                        ['Project name provided', Boolean(project.project_name)],
+                        ['Student submission received', !project.roster_only],
+                        ['Mentor accepted submission', !project.roster_only && !project.can_assign]
+                    ];
+                    for (const [label, done] of steps) {
+                        const item = document.createElement('li');
+                        item.className = done ? 'is-done' : 'is-pending';
+                        const marker = document.createElement('span');
+                        marker.className = 'project-details-check-marker';
+                        marker.textContent = done ? '✓' : '○';
+                        marker.setAttribute('aria-hidden', 'true');
+                        item.append(marker, document.createTextNode(label));
+                        checklist.append(item);
+                    }
+                    document.getElementById('project-details-abstract').textContent = project.project_abstract || 'No abstract provided.';
+                    if (project.can_assign) {
+                        projectDetailsAccept.dataset.projectId = String(project.id);
+                        projectDetailsAccept.disabled = false;
+                        projectDetailsAccept.classList.remove('hidden');
+                        projectDetailsReject.dataset.projectId = String(project.id);
+                        projectDetailsReject.disabled = false;
+                        projectDetailsReject.classList.remove('hidden');
+                    }
+                    document.getElementById('project-details-close').focus();
+                } catch (loadError) {
+                    document.getElementById('project-details-title').textContent = 'Project unavailable';
+                    error.textContent = loadError.message;
+                }
+            }
+
+            function closeProjectDetails() { projectDetailsModal.classList.remove('active'); }
+            document.getElementById('project-details-close').addEventListener('click', closeProjectDetails);
+            document.getElementById('project-details-dismiss').addEventListener('click', closeProjectDetails);
+            projectDetailsModal.addEventListener('click', event => { if (event.target === projectDetailsModal) closeProjectDetails(); });
+            projectDetailsAccept.addEventListener('click', () => acceptProject(projectDetailsAccept.dataset.projectId, projectDetailsAccept));
+            projectDetailsReject.addEventListener('click', () => rejectProject(projectDetailsReject.dataset.projectId, projectDetailsReject));
+
             async function loadProjects() {
-                    const tbody = document.querySelector('#view-project-list .mentor-table tbody');
-                if (!tbody) return;
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-spinner-gap ph-spin"></i> Loading projects...</td></tr>';
+                const assignedBody = document.querySelector('#assigned-projects-table tbody');
+                const pendingBody = document.querySelector('#pending-projects-table tbody');
+                if (!assignedBody || !pendingBody) return;
+                assignedBody.innerHTML = '<tr><td colspan="3">Loading assigned groups…</td></tr>';
+                pendingBody.innerHTML = '<tr><td colspan="6">Loading submitted projects…</td></tr>';
 
                 try {
-                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
-                    if (!response.ok) throw new Error('Failed to fetch');
-                    const projects = await response.json();
-                    projectCatalog = new Map(projects.map(project => [String(project.id), project]));
-
-                    if (projects.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);"><i class="ph ph-folder-dashed"></i> No projects submitted yet.</td></tr>';
-                        return;
+                    const projectResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
+                    if (!projectResponse.ok) throw new Error('Failed to fetch projects');
+                    const projects = await projectResponse.json();
+                    let roster = [];
+                    try {
+                        const rosterResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students`);
+                        if (rosterResponse.ok) roster = await rosterResponse.json();
+                    } catch (rosterError) {
+                        console.warn('Could not load assigned mentor roster:', rosterError);
                     }
-
-                    tbody.innerHTML = projects.map(p => `
-                        <tr>
-                            <td class="project-name">${escapeHtml(p.project_name || 'Untitled')}</td>
-                            <td>Group ${escapeHtml(p.group_no || '--')}</td>
-                            <td>${escapeHtml(p.team || 'N/A')}</td>
-                            <td><span class="chip verified"><i class="ph-fill ph-check-circle"></i> Submitted</span></td>
-                            <td>${escapeHtml(p.year || 'N/A')}</td>
-                            <td>${p.can_assign ? '<button class="btn-table-action" type="button" data-assign-project-id="' + escapeHtml(p.id) + '">Assign to me</button>' : '<span class="chip verified">' + (p.assigned_to_me ? 'Assigned to me' : 'Assigned') + '</span>'}</td>
-                            <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(p.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                        </tr>
-                    `).join('');
-
-                    tbody.querySelectorAll('[data-assign-project-id]').forEach(button => {
-                        button.addEventListener('click', async () => {
-                            button.disabled = true;
-                            try {
-                                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(button.dataset.assignProjectId)}/assign`, { method: 'PATCH' });
-                                const result = await response.json();
-                                if (!response.ok) throw new Error(result.detail || 'Could not assign project');
-                                await Promise.all([loadProjects(), loadStudents(), loadAssignedGroups(), loadDashboard()]);
-                            } catch (error) {
-                                alert(error.message || 'Could not assign project');
-                                button.disabled = false;
-                            }
-                        });
-                    });
+                    projectCatalog = new Map(projects.map(project => [String(project.id), project]));
+                    const assigned = projects.filter(project => project.assigned_to_me);
+                    const pending = projects.filter(project => project.can_assign);
+                    const canonicalTeams = new Set(projects.map(project => project.team).filter(Boolean));
+                    for (const student of roster) {
+                        for (const project of projects) {
+                            if (project.team === student.team_name && student.github_url) project.github_url = student.github_url;
+                        }
+                    }
+                    rosterProjectCatalog = new Map();
+                    for (const student of roster) {
+                        const team = student.team_name !== 'No Group' ? student.team_name : (student.group_number ? `Group ${student.group_number}` : '');
+                        if (!team || canonicalTeams.has(team)) continue;
+                        const id = `roster:${team}`;
+                        let entry = rosterProjectCatalog.get(id);
+                        if (!entry) {
+                            const match = /^Group\s+(\d+)$/i.exec(team);
+                            entry = { id, team, group_no: match ? match[1] : student.group_number,
+                                project_name: student.project_name === 'No Project' ? '' : student.project_name,
+                                year: student.year, members: [], project_abstract: '',
+                                github_url: student.github_url, roster_only: true };
+                            rosterProjectCatalog.set(id, entry);
+                        }
+                        if (student.prn) entry.members.push(`${student.student_name || student.prn} (${student.prn})`);
+                        if (!entry.project_name && student.project_name !== 'No Project') entry.project_name = student.project_name;
+                    }
+                    const rosterProjects = [...rosterProjectCatalog.values()];
+                    assignedBody.innerHTML = assigned.length || rosterProjects.length ? [...assigned, ...rosterProjects].map(project => `
+                        <tr data-open-project-id="${escapeHtml(project.id)}">
+                            <td>${escapeHtml(project.group_no ? `Group ${project.group_no}` : project.team || 'Group —')}</td>
+                            <td class="project-name">${escapeHtml(project.project_name || 'Not yet assigned')}</td>
+                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
+                        </tr>`).join('') : '<tr><td colspan="3">No groups assigned to you yet.</td></tr>';
+                    pendingBody.innerHTML = pending.length ? pending.map(project => `
+                        <tr data-open-project-id="${escapeHtml(project.id)}">
+                            <td class="project-name">${escapeHtml(project.project_name || 'Untitled')}</td>
+                            <td>${escapeHtml(project.team || '—')}</td>
+                            <td>${escapeHtml(project.year || '—')}</td>
+                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
+                            <td><button class="btn btn-primary" type="button" data-assign-project-id="${escapeHtml(project.id)}">Accept</button></td>
+                            <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(project.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
+                        </tr>`).join('') : '<tr><td colspan="6">No submissions awaiting acceptance.</td></tr>';
+                    document.getElementById('project-search').dispatchEvent(new Event('input'));
 
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--status-pending);"><i class="ph-fill ph-warning"></i> Failed to load projects. Ensure backend is running.</td></tr>';
+                    assignedBody.innerHTML = '<tr><td colspan="3">Could not load assigned groups.</td></tr>';
+                    pendingBody.innerHTML = '<tr><td colspan="6">Could not load submitted projects.</td></tr>';
                 }
             }
+
+            document.getElementById('view-project-list').addEventListener('click', event => {
+                const accept = event.target.closest('[data-assign-project-id]');
+                if (accept) { acceptProject(accept.dataset.assignProjectId, accept); return; }
+                if (event.target.closest('.btn-axiom-ai')) return;
+                const opener = event.target.closest('[data-view-project-id], [data-open-project-id]');
+                if (opener) openProjectDetails(opener.dataset.viewProjectId || opener.dataset.openProjectId);
+            });
 
             // ============================================
             // Load Students from API
@@ -726,7 +895,7 @@
                 axiomModal.classList.remove('active');
             }
 
-            document.querySelector('#view-project-list .mentor-table tbody').addEventListener('click', event => {
+            document.getElementById('view-project-list').addEventListener('click', event => {
                 const button = event.target.closest('.btn-axiom-ai[data-project-id]');
                 if (!button) return;
                 const project = projectCatalog.get(button.dataset.projectId);
@@ -941,7 +1110,9 @@
                     openRosterModal(student, button.dataset.action === 'edit');
                     return;
                 }
-                if (!confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`)) return;
+                if (!await window.projectGuardFeedback.confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`, {
+                    title: 'Remove student from roster', confirmLabel: 'Remove student'
+                })) return;
                 button.disabled = true;
                 try {
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/${student.id}`, { method: 'DELETE' });
@@ -1095,7 +1266,7 @@
                     await loadDashboard();
                 } catch (error) {
                     button.disabled = false;
-                    alert(error.message);
+                    window.projectGuardFeedback.notify(error.message, 'error');
                 }
             });
 
@@ -1166,6 +1337,8 @@
             const fileNameSpan = document.getElementById('upload-file-name');
             const removeBtn = document.getElementById('remove-upload-file');
             const addStudentsBtn = document.getElementById('add-students-btn');
+            const replaceTeamsBtn = document.getElementById('replace-teams-btn');
+            const conflictBox = document.getElementById('team-import-conflicts');
             const importStatus = document.getElementById('student-import-status');
 
             if (dropZone && fileInput) {
@@ -1202,7 +1375,12 @@
                     else if (type === 'info') icon = 'ph-info';
 
                     importStatus.className = `student-import-status status-${type}`;
-                    importStatus.innerHTML = `<i class="ph ${icon}"></i> <span>${message}</span>`;
+                    importStatus.replaceChildren();
+                    const iconElement = document.createElement('i');
+                    iconElement.className = `ph ${icon}`;
+                    const messageElement = document.createElement('span');
+                    messageElement.textContent = message;
+                    importStatus.append(iconElement, messageElement);
                 }
 
                 // Remove file
@@ -1212,6 +1390,9 @@
                         filePreview.classList.add('hidden');
                         dropZone.style.display = '';
                         addStudentsBtn.disabled = true;
+                        replaceTeamsBtn.disabled = true;
+                        conflictBox.replaceChildren();
+                        conflictBox.classList.add('hidden');
                         setImportStatus(null);
                     });
                 }
@@ -1220,12 +1401,16 @@
                     if (!file.name.toLowerCase().endsWith('.xlsx')) {
                         setImportStatus('error', 'Please choose a valid .xlsx Excel file.');
                         addStudentsBtn.disabled = true;
+                        replaceTeamsBtn.disabled = true;
                         return;
                     }
                     fileNameSpan.textContent = file.name;
                     filePreview.classList.remove('hidden');
                     dropZone.style.display = 'none';
                     addStudentsBtn.disabled = false;
+                    replaceTeamsBtn.disabled = false;
+                    conflictBox.replaceChildren();
+                    conflictBox.classList.add('hidden');
                     setImportStatus(null);
                 }
 
@@ -1264,6 +1449,63 @@
                     } catch (error) {
                         setImportStatus('error', error.message || 'Could not import students.');
                         addStudentsBtn.disabled = false;
+                    }
+                });
+
+                replaceTeamsBtn.addEventListener('click', async () => {
+                    const file = fileInput.files[0];
+                    if (!file) return;
+                    const choices = {};
+                    for (const select of conflictBox.querySelectorAll('select[data-prn]')) {
+                        if (!select.value) {
+                            setImportStatus('error', 'Choose a group for every duplicate PRN.');
+                            return;
+                        }
+                        choices[select.dataset.prn] = select.value;
+                    }
+                    if (!await window.projectGuardFeedback.confirm('Replace every saved team membership and mentor roster row with this Excel sheet? Student-submitted projects will stay with their teams.', {
+                        title: 'Replace all team data', confirmLabel: 'Replace all teams'
+                    })) return;
+                    const form = new FormData();
+                    form.append('file', file);
+                    form.append('resolutions', JSON.stringify(choices));
+                    replaceTeamsBtn.disabled = true;
+                    setImportStatus('loading', 'Validating and replacing all teams...');
+                    try {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/teams/import`, {
+                            method: 'POST', body: form
+                        });
+                        const result = await response.json();
+                        if (!response.ok) {
+                            if (response.status === 409 && result.detail?.conflicts) {
+                                conflictBox.replaceChildren();
+                                for (const conflict of result.detail.conflicts) {
+                                    const label = document.createElement('label');
+                                    label.textContent = `PRN ${conflict.prn}: choose the correct group `;
+                                    const select = document.createElement('select');
+                                    select.dataset.prn = conflict.prn;
+                                    select.append(new Option('Choose group', ''));
+                                    for (const group of conflict.groups) select.append(new Option(`Group ${group}`, group));
+                                    label.append(select);
+                                    conflictBox.append(label);
+                                }
+                                conflictBox.classList.remove('hidden');
+                                throw new Error(result.detail.message);
+                            }
+                            throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not replace teams.');
+                        }
+                        setImportStatus('success', `Replaced ${result.groups} groups and ${result.memberships} memberships. Student projects were retained.`);
+                        fileInput.value = '';
+                        filePreview.classList.add('hidden');
+                        dropZone.style.display = '';
+                        conflictBox.replaceChildren();
+                        conflictBox.classList.add('hidden');
+                        await loadStudents();
+                        await loadAssignedGroups();
+                    } catch (error) {
+                        setImportStatus('error', error.message || 'Could not replace teams.');
+                    } finally {
+                        replaceTeamsBtn.disabled = !fileInput.files.length;
                     }
                 });
             }

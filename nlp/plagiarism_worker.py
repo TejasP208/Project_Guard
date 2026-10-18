@@ -18,6 +18,7 @@ def main() -> int:
         from nlp.checker import run_plagiarism_check
         result = run_plagiarism_check(
             request["title"], request["description"], file_bytes, request["filename"],
+            request.get("exclude_project_id"),
         )
     sys.stdout.write(json.dumps(result, ensure_ascii=False, allow_nan=False))
     return 0

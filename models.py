@@ -26,7 +26,6 @@ class Student(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     clerk_user_id: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     roll_no: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
-    password: Mapped[str | None] = mapped_column(String, nullable=True)
     year: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
@@ -35,6 +34,8 @@ class EnrollmentCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="student", server_default="student")
+    issued_by_clerk_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    verification_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     roll_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     year: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -64,6 +65,11 @@ class Project(Base):
         ForeignKey("mentors.id", ondelete="SET NULL"), nullable=True, index=True
     )
     mentor_assigned_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    submission_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    rejected_by_mentor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mentors.id", ondelete="SET NULL"), nullable=True
+    )
+    rejected_at: Mapped[str | None] = mapped_column(String, nullable=True)
     # Cloudflare Qwen3 embeddings are 1024-dimensional and nullable until indexed.
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(1024), nullable=True)
 
@@ -74,7 +80,6 @@ class Mentor(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     clerk_user_id: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     username: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=True)
-    password: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class MentorStudent(Base):
@@ -112,11 +117,12 @@ class Team(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # Team names are not unique in existing project data; team_code is the identifier.
     team_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    password: Mapped[str | None] = mapped_column(String, nullable=True)
     year: Mapped[str | None] = mapped_column(String, nullable=True)
     mentor_name: Mapped[str | None] = mapped_column(String, nullable=True)
     team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    sheet_group_no: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
+    github_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
     max_members: Mapped[int | None] = mapped_column(Integer, default=4, nullable=True)
     created_by_student_id: Mapped[int | None] = mapped_column(
         ForeignKey("students.id", ondelete="SET NULL"), nullable=True, index=True

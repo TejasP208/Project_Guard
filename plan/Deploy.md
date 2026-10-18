@@ -11,7 +11,9 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 **Planned changes:**
 - [ ] Deploy `Frontend/` to Cloudflare Pages.
 - [x] Route frontend API requests through one configurable API base URL.
-- [ ] Set `Frontend/deployment-config.js` to the deployed Render API origin before publishing.
+- [x] Add `build_frontend.py` to inject the API origin and generate the admin CSP response header; set Cloudflare Pages build command to `python build_frontend.py` and output directory to `dist`.
+- [ ] Set `PROJECT_GUARD_API_BASE_URL` in the frontend build environment to the deployed API's HTTPS origin before publishing.
+- [ ] Set `PROJECT_GUARD_CLERK_FAPI_HOST` to the exact Clerk Frontend API hostname before publishing, then inspect the deployed `/admin.html` response header and exercise admin sign-in and enrollment flows in a browser.
 - [ ] Configure backend CORS to allow the deployed Cloudflare Pages domain.
 
 ## Backend hosting
@@ -20,19 +22,23 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 **Planned changes:**
 - [ ] Deploy the API as a Render Web Service.
-- [ ] Bind the server to `0.0.0.0` and Render's `$PORT`.
+- [x] Document the backend build command as `sh build_backend.sh`.
+- [ ] Use start command `uvicorn main:app --host 0.0.0.0 --port $PORT` on Render.
 - [ ] Store Groq and Cloudflare credentials in Render environment settings; do not put them in frontend code.
 - [ ] Account for the possibility that Render's free web services sleep while idle.
 - [ ] Configure `TRUSTED_PROXY_IPS` with the hosting provider's documented proxy CIDRs before relying on client-IP rate limits. Do not trust forwarded IP headers from arbitrary clients.
 - [ ] Keep public deployment blocked until both frontend and API are served over HTTPS and the exact deployed origins are configured.
 
+**Production environment values:** Set these in the backend provider's private environment settings. `APP_ENV=production`; `DATABASE_URL`; live `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`; identical exact HTTPS frontend origin lists in `CLERK_AUTHORIZED_PARTIES` and `CORS_ALLOWED_ORIGINS`; independent random `RATE_LIMIT_HASH_KEY` with at least 32 characters; and provider-documented `TRUSTED_PROXY_IPS`. Keep `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `ENROLLMENT_ADMIN_CLERK_USER_IDS`, and optional `CLERK_JWT_KEY` private as well. Production startup checks all required keys/settings, HTTPS origins, matching origin lists, proxy ranges, and the independent rate-limit key. Do not copy example or development values into production.
+
 ## Dependencies
 
-**Current state:** `requirements.txt` may not clearly declare every imported runtime dependency.
+**Current state:** A fresh temporary Python 3.14.7 environment on macOS ARM installed `requirements.txt` successfully, `pip check` reported no broken requirements, and backend import plus NLTK preprocessing checks passed. This is not the intended production host or operating system. Dependencies are not locked and the set still includes PyTorch/Sentence Transformers for the SQLite checker fallback and legacy indexing/manual tools.
 
 **Planned changes:**
-- [ ] Make the dependency list self-contained, including FastAPI, Uvicorn, SQLAlchemy, Passlib, `python-multipart`, the Groq SDK, PostgreSQL driver, pgvector client, and document/NLP libraries still used at runtime.
-- [ ] Remove PyTorch and Sentence Transformers if runtime code no longer uses them after the embedding migration.
+- [x] Make the backend build check declared dependencies with `pip check`, download NLTK resources, validate preprocessing, and import `main`.
+- [ ] Exercise a clean installation and startup on the selected backend host and its Python version.
+- [ ] Decide whether to retain the SQLite checker fallback and legacy index/manual tools before removing PyTorch/Sentence Transformers and their exclusive dependencies.
 
 ## Relational database
 
@@ -62,11 +68,11 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 ## Originality score
 
-**Current state:** The PostgreSQL checker combines TF-IDF (60%) and Qwen similarity (40%). LDA/SBERT remain in the legacy SQLite fallback. Threshold calibration remains separate from release connectivity checks.
+**Current state:** The PostgreSQL checker combines TF-IDF (60%) and Qwen similarity (40%); these weights and the previously used 30% submission cutoff have not been calibrated because `embeddings/labeled_cases.csv` has no labeled cases. Scores are advisory and submissions are not hard-blocked unless `ORIGINALITY_BLOCK_THRESHOLD` is explicitly configured. Set that value only after representative labeled examples support the selected cutoff. The calibration script evaluates the configured weights; it does not optimize them. LDA/SBERT remain in the legacy SQLite fallback.
 
 **Planned changes:**
 - [x] Use the planned lexical score plus Qwen cosine similarity in the active PostgreSQL checker.
-- [ ] Normalize both signals, choose and document their weights, and tune thresholds against representative examples.
+- [ ] Collect representative labeled cases, evaluate and document the weights and cutoff (including held-out examples), then configure `ORIGINALITY_BLOCK_THRESHOLD` if hard blocking is justified.
 - [ ] Remove LDA and SBERT layers if they are no longer part of the design.
 
 ## Documents
@@ -84,7 +90,8 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 **Current state:** Clerk sessions are verified by FastAPI, linked PostgreSQL profiles supply student/mentor identity, and API routes require a valid session. Browser `localStorage` holds display preferences only.
 
 **Planned changes:**
-- [ ] Complete the production configuration, authoritative enrollment, and live-browser verification in `clerk-authentication-plan.md` before exposing the service publicly.
+- [ ] Complete the production configuration and live-browser verification in `clerk-authentication-plan.md` before exposing the service publicly. Follow `enrollment-operations.md` for recipient verification and private code delivery.
+- [ ] Complete every applicable check in `runtime-verification-checklist.md` on staging with at least two backend workers before public release.
 - [x] Add server-side authentication and student/mentor role checks to protected endpoints.
 - [x] Require authentication for routes that expose application data.
 - [x] Do not treat browser-only login state as authorization.
@@ -99,7 +106,7 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 **Clerk production settings:**
 - [ ] Create/select the Clerk production instance and use its `pk_live_` publishable key and `sk_live_` secret key.
-- [ ] Set Render environment variables: `APP_ENV=production`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_AUTHORIZED_PARTIES`, and `CORS_ALLOWED_ORIGINS`.
+- [ ] Set Render environment variables: `APP_ENV=production`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_AUTHORIZED_PARTIES`, `CORS_ALLOWED_ORIGINS`, and an independent random `RATE_LIMIT_HASH_KEY` of at least 32 characters.
 - [ ] Set both origin allowlists to the exact Cloudflare Pages production origin(s), including any custom frontend domain; use HTTPS origins without paths or wildcards.
 - [ ] Set `Frontend/deployment-config.js` to the Render API's HTTPS origin before publishing the static frontend.
 - [ ] In the Clerk production instance, configure the deployed frontend domain and its sign-in/sign-up redirect URLs. Keep the Clerk secret key only in Render's private environment settings.
@@ -110,12 +117,14 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 ### October 7 preparation and pending decisions
 
-- Student enrollment now requires an administrator-issued single-use code; see `student-enrollment.md` for private terminal commands. Mentor enrollment entitlement remains deferred and blocks public deployment. Earlier enrollment deferral is superseded for students by this implementation.
+- Student and mentor enrollment now require administrator-issued, single-use, identity-bound codes. Administrators must verify recipients and deliver codes privately; real Clerk browser flows still need deployment verification.
 - Hosting has not been created. HTTPS frontend/API URLs, live Clerk keys, exact origin allowlists, and proxy ranges remain pending. Do not substitute example domains into active configuration.
+- When hosting is created, deploy the backend first, then the static frontend with `PROJECT_GUARD_API_BASE_URL` set to that backend's public HTTPS origin and `PROJECT_GUARD_CLERK_FAPI_HOST` set to the exact Clerk Frontend API hostname. Add the final frontend origin to both backend origin variables and Clerk's production allowed domains/redirect URLs. Rebuild the frontend after the API and Clerk origins are known. `build_frontend.py` writes only into its output directory, places only the public API origin in browser assets, and emits a restrictive CSP for `/admin.html`.
 - Use `sh build_backend.sh` as the backend build command. It installs requirements and NLTK corpora and checks preprocessing. Request workers no longer download corpora on import. Set `NLTK_DATA` to a location shared by build and runtime if the host uses separate users/directories.
 - Run `python identity_integrity.py` for a read-only identity audit. After administrator-reviewed cleanup, run `python identity_integrity.py --apply`. It locks the affected tables, audits again, and atomically adds normalized unique indexes, nonblank identity checks, and team membership/invitation foreign keys. It does not delete or choose records.
 - The migration does not enforce cross-table Clerk subject uniqueness or title-alias mentor uniqueness in PostgreSQL; the audit detects these and application identity resolution remains required. Re-run the audit before release. Production startup does not automatically apply this migration.
 - Live audit: 3 student profiles, 1 mentor profile, 16 memberships, 132 roster rows, 0 invitations. Three duplicate membership groups block migration: rows 1/2 (teams 1/4), rows 5/6/8/9/10/11 (teams 11/12/13/13/14/15), rows 7/12/13 (teams 12/16/16). All other audit conflict categories were empty. No database rows or constraints were changed.
+- The mentor portal now has a separate **Replace All Teams** workbook action. It validates the complete group sheet, asks for an explicit group choice when a PRN appears twice, then replaces team memberships, invitations, and mentor roster rows in one transaction. Existing student-submitted projects stay attached to their original teams. A project team that cannot be mapped safely to a sheet group blocks the import. Chat and scheduled review history for changed groups is archived out of the current room to prevent access by new members. The demo workbook has PRN `124A9023` in Groups 1 and 12; the authoritative choice supplied for this upload is Group 12. Uploading the demo workbook to the configured database has not been performed.
 - Production secret storage, private PostgreSQL/pgvector access, trusted proxy configuration, and deployed sign-in/workflow checks remain pending until hosting exists.
 
 - [ ] Review each section above and complete the required changes before deployment.
