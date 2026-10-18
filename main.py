@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import case, delete, func, or_
+from sqlalchemy import case, delete, func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from clerk_backend_api import Clerk
@@ -31,6 +31,7 @@ from axiom_ai import Chatbot_stream
 from database import SessionLocal, engine, initialize_database
 from clerk_auth import require_clerk_user_id, validate_production_clerk_config
 from mentor_roster import mentor_key, parse_mentor_roster
+from team_sheet_import import TeamSheetError, parse_team_sheet, replace_team_sheet
 from enrollment import redeem_student, redeem_mentor
 from models import ApiRateLimitBucket, Base, EnrollmentCode, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from enrollment import code_hash
@@ -71,6 +72,7 @@ RATE_LIMITS = {
     ("/team-invitations", "POST"): (10, 60, 120),
     ("/join-team", "POST"): (5, 60, 100),
     ("/mentor/students/import", "POST"): (5, 3600, 50),
+    ("/mentor/teams/import", "POST"): (5, 3600, 50),
     ("/mentor/students", "POST"): (20, 3600, 200),
 }
 _plagiarism_semaphore = asyncio.Semaphore(1)
@@ -305,6 +307,31 @@ def _team_project_for_student(db, roll_no: str) -> Project | None:
     if not member:
         return None
     return db.query(Project).filter(Project.team_id == member.team_id).first()
+
+
+def _sync_student_roster_for_team(db, student: Student, team: Team | None) -> None:
+    """Follow the student's current team without transferring its old project."""
+    roll_no = student.roll_no or ""
+    roster_rows = db.query(MentorStudent).filter(
+        func.lower(MentorStudent.prn) == roll_no.strip().lower()
+    ).with_for_update().all()
+    project = db.query(Project).filter(Project.team_id == team.id).first() if team else None
+    mentor = db.get(Mentor, project.assigned_mentor_id) if project and project.assigned_mentor_id else None
+    if not mentor:
+        for row in roster_rows:
+            db.delete(row)
+        return
+    entry = roster_rows[0] if roster_rows else MentorStudent(prn=roll_no)
+    if not roster_rows:
+        db.add(entry)
+    for stale in roster_rows[1:]:
+        db.delete(stale)
+    entry.mentor_name = mentor.username
+    entry.mentor_key = mentor_key(mentor.username)
+    entry.student_name = entry.student_name or roll_no
+    entry.group_name = str(project.group_no or team.team_name or "") or None
+    entry.project_name = project.project_name
+    entry.year = student.year or team.year
 
 
 def _project_available_to_mentor(db, roll_no: str, mentor_id: int) -> Project | None:
@@ -669,6 +696,7 @@ def create_team(data: CreateTeamRequest, request: Request):
         
             member = TeamMember(team_id=new_team.id, roll_no=roll_no)
             db.add(member)
+            _sync_student_roster_for_team(db, student, new_team)
 
             db.commit()
             db.refresh(new_team)
@@ -711,6 +739,7 @@ def join_team(data: JoinTeamRequest, request: Request):
         
             new_member = TeamMember(team_id=team.id, roll_no=roll_no)
             db.add(new_member)
+            _sync_student_roster_for_team(db, student, team)
             db.commit()
 
             # Fetch the entire new list of members so the UI can draw the Roster
@@ -779,12 +808,14 @@ def leave_team(request: Request):
                 raise HTTPException(status_code=404, detail="Team not found.")
             team_id = team.id
             db.delete(member)
+            _sync_student_roster_for_team(db, student, None)
             # Clean up empty teams
             remaining_members = db.query(TeamMember).filter(TeamMember.team_id == team_id).count()
             if remaining_members == 0:
                 has_project = db.query(Project.id).filter(Project.team_id == team_id).first()
                 team = db.query(Team).filter(Team.id == team_id).first() if not has_project else None
                 if team:
+                    db.query(TeamInvitation).filter(TeamInvitation.team_id == team_id).delete()
                     db.delete(team)
             db.commit()
             return {"message": "Successfully left the team"}
@@ -862,7 +893,7 @@ def _save_project_submission(data: ProjectSubmission, request: Request):
             # Students overwrite only the team project's content. The mentor assignment
             # and roster ownership fields are preserved on resubmission.
             project.year = student.year or team.year or ""
-            project.group_no = None
+            # Selection order is assigned by the mentor and survives later edits.
             project.project_name = project_name
             project.project_abstract = project_abstract
             project.team_name = team.team_name
@@ -958,6 +989,24 @@ def list_projects(request: Request):
         return [project_summary(project, mentor.id) for project in projects]
 
 
+@app.get("/api/projects/{project_id}")
+def get_project_details(project_id: int, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
+    with SessionLocal() as db:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        project = mentor_projects(db, mentor.id).filter(Project.id == project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found or not available to this mentor.")
+        members = db.query(TeamMember.roll_no).filter(TeamMember.team_id == project.team_id).order_by(TeamMember.id).all()
+        return {
+            **project_summary(project, mentor.id),
+            "project_abstract": project.project_abstract or "",
+            "members": [row.roll_no for row in members if row.roll_no],
+        }
+
+
 @app.patch("/api/projects/{project_id}/assign")
 def assign_project_to_current_mentor(project_id: int, request: Request):
     mentor_user = require_profile_role(request, "mentor")["identifier"]
@@ -1004,6 +1053,15 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                         detail="A team member is already assigned to another mentor. Contact an administrator to resolve the roster.",
                     )
 
+            if project.assigned_mentor_id is None or project.group_no is None:
+                # Serialize number allocation across mentors and API workers.
+                if engine.dialect.name == "postgresql":
+                    db.execute(text("SELECT pg_advisory_xact_lock(20261018, 1)"))
+                last_number = db.query(func.max(Project.group_no)).filter(
+                    Project.team_id.is_not(None),
+                    Project.assigned_mentor_id.is_not(None),
+                ).scalar() or 0
+                project.group_no = last_number + 1
             project.assigned_mentor_id = mentor.id
             project.mentor_assigned_at = project.mentor_assigned_at or datetime.now().isoformat(timespec="seconds")
             for roll_number in roll_numbers:
@@ -1017,7 +1075,7 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                         mentor_key=mentor_key_value,
                         student_name=roll_number,
                         prn=roll_number,
-                        group_name=team.team_name,
+                        group_name=str(project.group_no),
                         year=student.year if student else team.year,
                     )
                     db.add(entry)
@@ -1025,7 +1083,7 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                     entry.mentor_name = mentor.username
                     entry.mentor_key = mentor_key_value
                     entry.student_name = entry.student_name or roll_number
-                    entry.group_name = entry.group_name or team.team_name
+                    entry.group_name = str(project.group_no)
                     entry.year = entry.year or (student.year if student else team.year)
                 # This is the student-owned project field mirrored into the mentor roster.
                 entry.project_name = project.project_name
@@ -1035,6 +1093,7 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                 "project_id": project.id,
                 "team_id": team.id,
                 "team_name": team.team_name,
+                "group_no": project.group_no,
                 "assigned_to_me": True,
             }
         except HTTPException:
@@ -1185,6 +1244,44 @@ async def import_mentor_students(file: Annotated[UploadFile, File()], request: R
             raise
 
 
+@app.post("/mentor/teams/import")
+async def import_all_teams(
+    request: Request,
+    file: Annotated[UploadFile, File()],
+    resolutions: Annotated[str, Form()] = "{}",
+):
+    require_profile_role(request, "mentor")
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Upload an .xlsx Excel file.")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="The Excel file must be 5 MB or smaller.")
+    if len(resolutions) > 32_000:
+        raise HTTPException(status_code=400, detail="Too many duplicate choices.")
+    try:
+        choices = json.loads(resolutions)
+        if not isinstance(choices, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in choices.items()):
+            raise ValueError("Invalid duplicate choices.")
+        groups = parse_team_sheet(content, choices)
+    except (ValueError, InvalidFileException, BadZipFile) as error:
+        if isinstance(error, TeamSheetError) and error.conflicts:
+            raise HTTPException(status_code=409, detail={"message": str(error), "conflicts": error.conflicts}) from error
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    with SessionLocal() as db:
+        try:
+            result = replace_team_sheet(db, groups)
+            db.commit()
+            return result
+        except TeamSheetError as error:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        except SQLAlchemyError as error:
+            db.rollback()
+            logger.error("Full team import failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=500, detail="Could not replace teams.") from error
+
+
 @app.get("/mentor/students")
 def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
     mentor_user = require_profile_role(request, "mentor")["identifier"]
@@ -1254,8 +1351,11 @@ def create_team_invitation(data: TeamInviteRequest, request: Request):
             raise HTTPException(status_code=404, detail="Team not found.")
         if invitee.roll_no.lower() == inviter_roll.lower():
             raise HTTPException(status_code=400, detail="You cannot invite yourself.")
-        if db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == invitee.roll_no.lower()).first():
-            raise HTTPException(status_code=409, detail="This student is already in a team.")
+        current_membership = db.query(TeamMember).filter(
+            func.lower(TeamMember.roll_no) == invitee.roll_no.lower()
+        ).first()
+        if current_membership and current_membership.team_id == team.id:
+            raise HTTPException(status_code=409, detail="This student is already in your team.")
         existing = db.query(TeamInvitation).filter(
             TeamInvitation.team_id == team.id,
             func.lower(TeamInvitation.invitee_roll_no) == invitee.roll_no.lower(),
@@ -1326,17 +1426,24 @@ def respond_to_team_invitation(invitation_id: int, data: TeamInviteResponse, req
             invitation.responded_at = datetime.now().isoformat(timespec="seconds")
             db.commit()
             return {"message": "Invitation declined.", "status": "declined"}
-        if db.query(TeamMember).filter(
+        current_memberships = db.query(TeamMember).filter(
             func.lower(TeamMember.roll_no) == invitation.invitee_roll_no.strip().lower()
-        ).first():
-            raise HTTPException(status_code=409, detail="You are already in a team.")
+        ).with_for_update().all()
         team = db.query(Team).filter(Team.id == invitation.team_id).with_for_update().first()
         if not team:
             raise HTTPException(status_code=404, detail="This team no longer exists.")
+        if any(member.team_id == team.id for member in current_memberships):
+            raise HTTPException(status_code=409, detail="You are already in this team.")
         member_count = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
         if member_count >= (team.max_members or 4):
             raise HTTPException(status_code=409, detail="This team is already full.")
+        # A student has one current team. Accepting another invitation moves only
+        # their membership; any submitted project remains with its original team.
+        for member in current_memberships:
+            db.delete(member)
+        db.flush()
         db.add(TeamMember(team_id=team.id, roll_no=invitation.invitee_roll_no))
+        _sync_student_roster_for_team(db, student, team)
         invitation.status = "accepted"
         invitation.responded_at = datetime.now().isoformat(timespec="seconds")
         other_invitations = db.query(TeamInvitation).filter(

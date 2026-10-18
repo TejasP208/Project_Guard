@@ -1087,6 +1087,17 @@ input[type="password"]:focus {
     transform: translateY(0) scale(1);
 }
 
+.project-details-modal { max-width: 680px; max-height: min(85vh, 760px); overflow-y: auto; }
+.project-details-status { color: var(--text-muted); margin: 0 0 16px; }
+.project-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0 0 22px; }
+.project-details-grid div { padding: 12px 14px; background: rgba(99, 102, 241, 0.06); border-radius: 10px; }
+.project-details-grid dt { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px; }
+.project-details-grid dd { margin: 0; overflow-wrap: anywhere; }
+.project-details-abstract { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.mentor-table tr[data-open-project-id] { cursor: pointer; }
+.mentor-table tr[data-open-project-id]:hover { background: rgba(99, 102, 241, 0.06); }
+@media (max-width: 600px) { .project-details-grid { grid-template-columns: 1fr; } }
+
 .modal-header {
     display: flex;
     align-items: center;

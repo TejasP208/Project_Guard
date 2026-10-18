@@ -113,6 +113,7 @@ class Team(Base):
     year: Mapped[str | None] = mapped_column(String, nullable=True)
     mentor_name: Mapped[str | None] = mapped_column(String, nullable=True)
     team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    sheet_group_no: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     max_members: Mapped[int | None] = mapped_column(Integer, default=4, nullable=True)
     created_by_student_id: Mapped[int | None] = mapped_column(

@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="team-invitation-icon"><i class="ph ph-users-three"></i></div>
                     <div class="team-invitation-copy">
                         <strong>${escapeInviteHtml(invitation.team_name)}</strong>
-                        <span>Invited by ${escapeInviteHtml(invitation.inviter_roll_no)}</span>
+                        <span>Invited by ${escapeInviteHtml(invitation.inviter_roll_no)}. Accepting moves you from your current team, if any. Your old team's project stays there.</span>
                     </div>
                     <div class="team-invitation-actions">
                         <button class="btn btn-secondary btn-sm" type="button" data-invite-action="decline">Decline</button>

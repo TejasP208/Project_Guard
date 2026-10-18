@@ -9,7 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import main
-from models import Base, Mentor, Project, Student, Team, TeamMember
+from models import Base, GroupMessage, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamMember
+from group_connect import room_id
 
 def workbook_bytes(rows):
     workbook = Workbook()
@@ -81,6 +82,75 @@ class MentorRosterTests(unittest.TestCase):
         wrong = self.upload([["Student Name", "PRN", "Guide"], ["Other", "S003", "Dr Shah"]])
         self.assertEqual(wrong.status_code, 400)
         self.assertEqual(len(self.roster()), 1)
+
+    def test_full_team_sheet_replaces_memberships_after_explicit_duplicate_choice(self):
+        sheet = workbook_bytes([
+            ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],
+            [1, "S00001", "One", "Sheet idea", "Dr Rao", None, None, None, None, None, None, "S00003", "Three"],
+            [2, "S00003", "Three", "Another idea", "Dr Shah"],
+        ])
+        with self.sessions() as db:
+            db.add_all([Team(id=9, team_name="Old team"), TeamMember(team_id=9, roll_no="OLD"),
+                        Project(team_id=9, project_name="Student submission")])
+            db.commit()
+        upload = lambda resolutions="{}": self.call(
+            "POST", "/mentor/teams/import", files={"file": ("groups.xlsx", sheet)},
+            data={"resolutions": resolutions},
+        )
+        conflict = upload()
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(conflict.json()["detail"]["conflicts"], [{"prn": "s00003", "groups": ["1", "2"]}])
+        with self.sessions() as db:
+            self.assertEqual(db.query(TeamMember).count(), 1)
+        response = upload('{"S00003":"2"}')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["memberships"], 2)
+        with self.sessions() as db:
+            self.assertEqual(db.query(TeamMember).count(), 2)
+            self.assertEqual(db.query(Team).filter(Team.sheet_group_no.is_not(None)).count(), 2)
+            self.assertEqual(db.query(Project).one().team_id, 9)
+            self.assertEqual(db.query(Team).filter(Team.id == 9).one().team_name, "Old team")
+        self.assertEqual(upload('{"S00003":"2"}').status_code, 200)
+        with self.sessions() as db:
+            self.assertEqual(db.query(TeamMember).count(), 2)
+            self.assertEqual(db.query(Team).count(), 3)
+
+    def test_full_team_sheet_rejects_unmapped_student_project_team(self):
+        with self.sessions() as db:
+            db.add_all([Team(id=9, team_name="Student team"), TeamMember(team_id=9, roll_no="S00001"),
+                        Project(team_id=9, project_name="Student submission")])
+            db.commit()
+        sheet = workbook_bytes([
+            ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],
+            [1, "S00001", "One", "Sheet idea", "Dr Rao"],
+        ])
+        response = self.call("POST", "/mentor/teams/import", files={"file": ("groups.xlsx", sheet)})
+        self.assertEqual(response.status_code, 409)
+        with self.sessions() as db:
+            self.assertEqual(db.query(TeamMember).one().team_id, 9)
+            self.assertEqual(db.query(Project).one().team_id, 9)
+
+    def test_full_team_sheet_archives_chat_and_reviews_when_group_members_change(self):
+        old_room = room_id("rao", "1")
+        with self.sessions() as db:
+            db.add_all([
+                MentorStudent(mentor_name="Dr Rao", mentor_key="rao", student_name="Old", prn="OLD", group_name="1"),
+                GroupMessage(room_id=old_room, sender_role="mentor", sender_user="Dr Rao", sender_name="Dr Rao",
+                             text="Private old message", created_at="2026-10-18"),
+                MentorReview(mentor_name="Dr Rao", mentor_key="rao", group_name="1", review_type="Review",
+                             review_date="2099-01-01", review_time="10:00", status="scheduled", created_at="2026-10-18"),
+            ])
+            db.commit()
+        sheet = workbook_bytes([
+            ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],
+            [1, "S00001", "New", "New idea", "Dr Rao"],
+        ])
+        response = self.call("POST", "/mentor/teams/import", files={"file": ("groups.xlsx", sheet)})
+        self.assertEqual(response.status_code, 200)
+        with self.sessions() as db:
+            self.assertTrue(db.query(GroupMessage).one().room_id.startswith("archived:"))
+            self.assertTrue(db.query(MentorReview).one().group_name.startswith("Archived "))
+            self.assertEqual(db.query(MentorReview).one().status, "archived")
 
     def test_add_student_uses_verified_mentor_and_rejects_spoofing(self):
         payload = {"student_name": " New Student ", "prn": "M001", "group_number": "7"}
@@ -164,6 +234,7 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual(created.status_code, 200)
         idea = {"project_name": "Original idea", "project_abstract": "Our approach"}
         self.assertEqual(self.call("POST", "/submit-project", role="student", user="S1", json=idea).status_code, 400)
+
         joined = self.call("POST", "/join-team", role="student", user="S2", json={"team_code": created.json()["team_code"]})
         self.assertEqual(joined.status_code, 200)
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})):
@@ -171,7 +242,9 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual(submitted.status_code, 200)
         project_id = submitted.json()["project_id"]
         url = f"/api/projects/{project_id}/assign"
-        self.assertEqual(self.call("PATCH", url).status_code, 200)
+        assignment = self.call("PATCH", url)
+        self.assertEqual(assignment.status_code, 200)
+        self.assertEqual(assignment.json()["group_no"], 1)
         self.assertEqual(self.call("PATCH", url, user="Dr Shah").status_code, 409)
         self.assertEqual(self.call("GET", "/api/projects", user="Dr Shah").json(), [])
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})) as check:
@@ -183,8 +256,23 @@ class MentorRosterTests(unittest.TestCase):
         self.assertTrue(all(row["project_name"] == "Refined idea" for row in self.roster()))
         with self.sessions() as db:
             self.assertEqual(db.get(Project, project_id).assigned_mentor_id, 1)
+            self.assertEqual(db.get(Project, project_id).group_no, 1)
         self.assertEqual(self.call("POST", "/leave-team", role="student", user="S2").status_code, 200)
         self.assertEqual(self.call("POST", "/submit-project", role="student", user="S1", json=idea).status_code, 400)
+
+    def test_group_numbers_follow_mentor_selection_order_across_mentors(self):
+        with self.sessions() as db:
+            db.add_all([
+                Student(roll_no="S1"), Student(roll_no="S2"),
+                Team(id=1, team_name="First submitted"), Team(id=2, team_name="Second submitted"),
+                TeamMember(team_id=1, roll_no="S1"), TeamMember(team_id=2, roll_no="S2"),
+                Project(id=1, team_id=1, project_name="First idea"),
+                Project(id=2, team_id=2, project_name="Second idea"),
+            ])
+            db.commit()
+        self.assertEqual(self.call("PATCH", "/api/projects/2/assign", user="Dr Shah").json()["group_no"], 1)
+        self.assertEqual(self.call("PATCH", "/api/projects/1/assign").json()["group_no"], 2)
+        self.assertEqual(self.call("PATCH", "/api/projects/1/assign").json()["group_no"], 2)
 
     def test_group_sheet_carries_guide_and_extra_members(self):
         rows = [["College"], ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],

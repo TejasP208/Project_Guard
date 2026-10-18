@@ -61,6 +61,9 @@ def _apply_migrations(connection):
             connection.exec_driver_sql("ALTER TABLE mentor_students ADD COLUMN project_name VARCHAR")
     if inspector.has_table("teams"):
         team_columns = {column["name"] for column in inspector.get_columns("teams")}
+        if "sheet_group_no" not in team_columns:
+            connection.exec_driver_sql("ALTER TABLE teams ADD COLUMN sheet_group_no VARCHAR")
+        connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_teams_sheet_group_no ON teams (sheet_group_no)")
         if "created_by_student_id" not in team_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE teams ADD COLUMN created_by_student_id INTEGER REFERENCES students(id) ON DELETE SET NULL"

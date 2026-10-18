@@ -79,6 +79,21 @@ class ProjectVisibilityTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/projects").status_code, 401)
         self.assertEqual(self.client.get("/api/projects", headers=self.headers("student:S1")).status_code, 403)
 
+    def test_project_details_follow_the_same_mentor_visibility_rules(self):
+        with self.sessions() as db:
+            db.add(TeamMember(team_id=2, roll_no="M1"))
+            db.commit()
+        open_project = self.client.get("/api/projects/3", headers=self.headers())
+        self.assertEqual(open_project.status_code, 200)
+        self.assertTrue(open_project.json()["can_assign"])
+        own_project = self.client.get("/api/projects/4", headers=self.headers())
+        self.assertEqual(own_project.status_code, 200)
+        self.assertEqual(own_project.json()["project_abstract"], "Verified private context")
+        self.assertEqual(own_project.json()["members"], ["M1"])
+        for project_id in (1, 2, 5, 6, 7):
+            self.assertEqual(self.client.get(f"/api/projects/{project_id}", headers=self.headers()).status_code, 404)
+        self.assertEqual(self.client.get("/api/projects/4", headers=self.headers("student:S1")).status_code, 403)
+
     def test_axiom_rejects_legacy_orphan_other_owner_and_spoofed_context(self):
         for project_id in (1, 2, 5, 6, 7):
             response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": project_id, "question": "Review"})
@@ -120,6 +135,49 @@ class ProjectVisibilityTests(unittest.TestCase):
         response = self.client.post("/api/profile/link", headers=self.headers("student:new"), json={"role": "student", "roll_no": "NEW", "year": "Y1", "enrollment_code": "fixture-code"})
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("clerk_user_id", response.json())
+
+    def test_accepting_invitation_moves_student_without_moving_old_project(self):
+        with self.sessions() as db:
+            db.add(MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student 1", prn="S1", group_name="Old"))
+            db.commit()
+        response = self.client.patch(
+            "/team-invitations/1", headers=self.headers("student:S1"), json={"action": "accept"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "accepted")
+        with self.sessions() as db:
+            memberships = db.query(TeamMember).filter(TeamMember.roll_no == "S1").all()
+            self.assertEqual([row.team_id for row in memberships], [1])
+            self.assertEqual(db.get(Project, 4).team_id, 2)
+            self.assertEqual(db.get(TeamInvitation, 1).status, "accepted")
+            self.assertIsNone(db.query(MentorStudent).filter(MentorStudent.prn == "S1").first())
+
+    def test_accepting_invitation_updates_roster_for_destination_mentor(self):
+        with self.sessions() as db:
+            db.add_all([
+                MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student 1", prn="S1"),
+                TeamInvitation(team_id=3, inviter_roll_no="S9", invitee_roll_no="S1", status="pending", created_at="2026-10-18"),
+            ])
+            db.commit()
+            invitation_id = db.query(TeamInvitation.id).filter(TeamInvitation.team_id == 3).scalar()
+        response = self.client.patch(
+            f"/team-invitations/{invitation_id}", headers=self.headers("student:S1"), json={"action": "accept"}
+        )
+        self.assertEqual(response.status_code, 200)
+        with self.sessions() as db:
+            entry = db.query(MentorStudent).filter(MentorStudent.prn == "S1").one()
+            self.assertEqual((entry.mentor_key, entry.project_name), ("mentor2", "Other project"))
+            self.assertEqual([row.team_id for row in db.query(TeamMember).filter(TeamMember.roll_no == "S1")], [3])
+
+    def test_invitation_can_be_sent_to_student_in_another_team(self):
+        with self.sessions() as db:
+            db.add_all([Student(roll_no="S3"), TeamMember(team_id=1, roll_no="S3")])
+            db.commit()
+        response = self.client.post(
+            "/team-invitations", headers=self.headers("student:S3"),
+            json={"invitee_roll_no": "S2"},
+        )
+        self.assertEqual(response.status_code, 201)
 
     def test_legacy_team_label_does_not_block_new_student_submission(self):
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})) as check:
