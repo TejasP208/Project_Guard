@@ -13,6 +13,8 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="style.css?v=account-actions-2">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="feedback.css">
+    <script src="feedback.js?v=accessible-feedback-1" defer></script>
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=portal-startup-3"></script>
     <script src="auth-retry.js?v=clock-retry-1"></script>
@@ -172,6 +174,8 @@
                     <div class="card glass-card">
 
                         <form id="submission-form" class="submission-form">
+
+                            <p id="project-review-status" class="project-review-status" role="status" hidden></p>
 
                             <!-- Inputs -->
                             <div class="form-group">
@@ -598,7 +602,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=team-github-1"></script>
+    <script src="script.js?v=project-review-status-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
     <script src="group_connect.js?v=project-visibility-1"></script>
 </body>

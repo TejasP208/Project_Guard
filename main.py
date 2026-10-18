@@ -47,6 +47,7 @@ from embeddings import CloudflareEmbeddingClient
 async def lifespan(_app: FastAPI):
     validate_production_clerk_config()
     _trusted_proxy_networks()
+    _originality_block_threshold()
     # Fail startup with a clear error if the hosting build skipped NLTK data.
     from nlp.preprocessor import preprocess
     if not preprocess("Students are building projects"):
@@ -65,6 +66,7 @@ RATE_LIMITS = {
     ("/api/admin/enrollments", "POST"): (30, 60, 120),
     ("/api/profile/link", "POST"): (5, 3600, 100),
     ("/api/projects/{project_id}/assign", "PATCH"): (10, 3600, 100),
+    ("/api/projects/{project_id}/reject", "PATCH"): (10, 3600, 100),
     ("/chat-stream", "GET"): (8, 60, 120),
     ("/mentor/axiom-stream", "POST"): (5, 60, 60),
     ("/check-plagiarism", "POST"): (3, 60, 30),
@@ -77,6 +79,20 @@ RATE_LIMITS = {
 }
 _plagiarism_semaphore = asyncio.Semaphore(1)
 _last_rate_cleanup = 0
+
+
+def _originality_block_threshold() -> float | None:
+    """Return a calibrated hard-block threshold, if one was configured."""
+    raw_threshold = os.getenv("ORIGINALITY_BLOCK_THRESHOLD", "").strip()
+    if not raw_threshold:
+        return None
+    try:
+        threshold = float(raw_threshold)
+    except ValueError as error:
+        raise RuntimeError("ORIGINALITY_BLOCK_THRESHOLD must be a number from 0 to 100.") from error
+    if not math.isfinite(threshold) or not 0 <= threshold <= 100:
+        raise RuntimeError("ORIGINALITY_BLOCK_THRESHOLD must be a number from 0 to 100.")
+    return threshold
 
 
 @asynccontextmanager
@@ -114,6 +130,8 @@ def _trusted_proxy_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Netw
                 networks.append(ipaddress.ip_network(value, strict=False))
             except ValueError as error:
                 raise RuntimeError("TRUSTED_PROXY_IPS must contain IP addresses or CIDR ranges.") from error
+    if _is_production_environment() and not networks:
+        raise RuntimeError("Production requires TRUSTED_PROXY_IPS for the hosting reverse proxy.")
     return networks
 
 
@@ -150,6 +168,8 @@ def rate_limit_retry_after(user_id: str, client_ip: str, method: str, path: str)
     normalized_path = path
     if path.startswith("/api/projects/") and path.endswith("/assign"):
         normalized_path = "/api/projects/{project_id}/assign"
+    elif path.startswith("/api/projects/") and path.endswith("/reject"):
+        normalized_path = "/api/projects/{project_id}/reject"
     configured = RATE_LIMITS.get((normalized_path, method.upper()))
     if not configured:
         return None
@@ -811,13 +831,19 @@ def get_student_team(request: Request):
             
             all_members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
             member_list = [m.roll_no for m in all_members]
+            project = db.query(Project).filter(Project.team_id == team.id).first()
         
             return {
                 "has_team": True,
                 "team_name": team.team_name,
                 "team_code": team.team_code,
                 "github_url": team.github_url,
-                "members": member_list
+                "members": member_list,
+                "project_name": project.project_name if project else None,
+                "submission_status": (
+                    "accepted" if project and project.assigned_mentor_id is not None
+                    else project.submission_status if project else None
+                ),
             }
         except SQLAlchemyError as e:
             logger.error("Student team lookup failed (%s)", type(e).__name__)
@@ -881,8 +907,15 @@ async def submit_project(data: ProjectSubmission, request: Request):
     if ("error" in result or isinstance(score, bool) or not isinstance(score, (int, float))
             or not math.isfinite(score) or not 0 <= score <= 100):
         raise HTTPException(status_code=503, detail="The submission check did not return a valid score. Please try again.")
-    if score > 30:
-        raise HTTPException(status_code=422, detail=f"Submission blocked: similarity score {score}% exceeds the 30% limit. Revise the title and abstract, then check again.")
+    block_threshold = _originality_block_threshold()
+    if block_threshold is not None and score > block_threshold:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Submission blocked: similarity score {score}% exceeds the "
+                f"configured {block_threshold:g}% limit. Revise the title and abstract, then check again."
+            ),
+        )
     return await run_in_threadpool(_save_project_submission, data, request)
 
 
@@ -934,6 +967,10 @@ def _save_project_submission(data: ProjectSubmission, request: Request):
             project.project_abstract = project_abstract
             project.team_name = team.team_name
             project.submitted_by_student_id = student.id
+            if project.assigned_mentor_id is None:
+                project.submission_status = "pending"
+                project.rejected_by_mentor_id = None
+                project.rejected_at = None
             if engine.dialect.name == "postgresql":
                 text = f"{project_name}. {project_abstract}".strip()
                 project.embedding = CloudflareEmbeddingClient().embed(text)
@@ -988,6 +1025,7 @@ async def check_plagiarism(
                     for key in ("plagiarism_percent", "risk_level", "document_text_truncated", "document_text_used_characters")
                     if key in result
                 }
+                result["submission_block_threshold"] = _originality_block_threshold()
             return result
     except HTTPException:
         raise
@@ -1065,6 +1103,8 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                 raise HTTPException(status_code=404, detail="Team project not found.")
             if project.assigned_mentor_id not in (None, mentor.id):
                 raise HTTPException(status_code=409, detail="This team project is already assigned to another mentor.")
+            if project.submission_status == "rejected":
+                raise HTTPException(status_code=409, detail="This project submission was rejected. The team must resubmit it before acceptance.")
 
             db.query(TeamMember).filter(TeamMember.team_id == team.id).with_for_update().all()
             members: list[TeamMember] = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
@@ -1100,6 +1140,9 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
                 project.group_no = last_number + 1
             project.assigned_mentor_id = mentor.id
             project.mentor_assigned_at = project.mentor_assigned_at or datetime.now().isoformat(timespec="seconds")
+            project.submission_status = "accepted"
+            project.rejected_by_mentor_id = None
+            project.rejected_at = None
             for roll_number in roll_numbers:
                 student = db.query(Student).filter(
                     func.lower(Student.roll_no) == roll_number.casefold()
@@ -1139,6 +1182,45 @@ def assign_project_to_current_mentor(project_id: int, request: Request):
             db.rollback()
             logger.error("Project assignment failed (%s)", type(error).__name__)
             raise HTTPException(status_code=500, detail="Could not assign the project.") from error
+
+
+@app.patch("/api/projects/{project_id}/reject")
+def reject_project_submission(project_id: int, request: Request):
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
+    with SessionLocal() as db:
+        try:
+            mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+            if not mentor:
+                raise HTTPException(status_code=404, detail="Mentor account not found.")
+            project_ref = db.query(Project.id, Project.team_id).filter(Project.id == project_id).first()
+            if not project_ref or project_ref.team_id is None:
+                raise HTTPException(status_code=404, detail="Team project not found.")
+            team = db.query(Team).filter(Team.id == project_ref.team_id).with_for_update().first()
+            if not team:
+                raise HTTPException(status_code=404, detail="Project team not found.")
+            project = db.query(Project).filter(
+                Project.id == project_id, Project.team_id == team.id
+            ).populate_existing().with_for_update().first()
+            if not project:
+                raise HTTPException(status_code=404, detail="Team project not found.")
+            if project.assigned_mentor_id is not None or project.submission_status == "accepted":
+                raise HTTPException(status_code=409, detail="An accepted project cannot be rejected.")
+            if project.submission_status == "rejected":
+                raise HTTPException(status_code=409, detail="This project submission has already been rejected.")
+            if not (project.project_name or "").strip():
+                raise HTTPException(status_code=409, detail="There is no submitted project to reject.")
+            project.submission_status = "rejected"
+            project.rejected_by_mentor_id = mentor.id
+            project.rejected_at = datetime.now().isoformat(timespec="seconds")
+            db.commit()
+            return {"message": "Project submission rejected. The team can edit and resubmit it.", "project_id": project.id}
+        except HTTPException:
+            db.rollback()
+            raise
+        except SQLAlchemyError as error:
+            db.rollback()
+            logger.error("Project rejection failed (%s)", type(error).__name__)
+            raise HTTPException(status_code=500, detail="Could not reject the project submission.") from error
 
 
 @app.get("/api/students")
@@ -1707,7 +1789,9 @@ class AdminEnrollmentRequest(StrictRequest):
     role: Literal["student", "mentor"] = "student"
     roll_no: str = Field(min_length=1, max_length=64)
     year: str = Field(default="", max_length=64)
-    expires_hours: int = Field(default=168, ge=1, le=8760)
+    expires_hours: int = Field(default=72, ge=1, le=168)
+    verification_method: Literal["official_roster", "institutional_contact", "in_person"]
+    recipient_verified: bool
 
 
 @app.get('/api/admin/enrollments')
@@ -1715,13 +1799,17 @@ def list_enrollments(request: Request):
     require_enrollment_admin(request)
     with SessionLocal() as db:
         return [{'id': row.id, 'role': row.role, 'roll_no': row.roll_no, 'year': row.year,
-                 'expires_at': row.expires_at, 'used_at': row.used_at, 'revoked_at': row.revoked_at}
+                 'expires_at': row.expires_at, 'used_at': row.used_at, 'revoked_at': row.revoked_at,
+                 'issued_by_clerk_user_id': row.issued_by_clerk_user_id,
+                 'verification_method': row.verification_method}
                 for row in db.query(EnrollmentCode).order_by(EnrollmentCode.id.desc()).limit(200)]
 
 
 @app.post('/api/admin/enrollments')
 def issue_enrollment(data: AdminEnrollmentRequest, request: Request):
     require_enrollment_admin(request)
+    if not data.recipient_verified:
+        raise HTTPException(422, 'Verify the recipient against an authoritative source before issuing a code.')
     with SessionLocal() as db:
         identifier = data.roll_no.strip()
         if not identifier or (data.role == "student" and not data.year.strip()):
@@ -1732,8 +1820,18 @@ def issue_enrollment(data: AdminEnrollmentRequest, request: Request):
             raise HTTPException(409, 'This identifier already has a linked or ambiguous profile.')
         code = secrets.token_urlsafe(24)
         now = int(time.time())
+        outstanding = db.query(EnrollmentCode).filter(
+            EnrollmentCode.role == data.role,
+            func.lower(func.trim(EnrollmentCode.roll_no)) == identifier.lower(),
+            EnrollmentCode.used_at.is_(None), EnrollmentCode.revoked_at.is_(None),
+            EnrollmentCode.expires_at > now,
+        ).with_for_update().all()
+        for previous in outstanding:
+            previous.revoked_at = now
         grant = EnrollmentCode(role=data.role, code_hash=code_hash(code), roll_no=identifier, year=data.year.strip(),
-                               created_at=now, expires_at=now + data.expires_hours * 3600)
+                               created_at=now, expires_at=now + data.expires_hours * 3600,
+                               issued_by_clerk_user_id=request.state.clerk_user_id,
+                               verification_method=data.verification_method)
         db.add(grant)
         db.commit()
         return {'id': grant.id, 'code': code, 'expires_at': grant.expires_at}

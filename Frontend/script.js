@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (file) {
                 if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
                     picInput.value = '';
-                    window.alert('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.');
+                    window.projectGuardFeedback.notify('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.', 'error');
                     return;
                 }
                 const reader = new FileReader();
@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             await loadTeamInvitations();
         } catch (error) {
-            alert(error.message);
+            window.projectGuardFeedback.notify(error.message, 'error');
             item.querySelectorAll('button').forEach(actionButton => { actionButton.disabled = false; });
         }
     });
@@ -233,14 +233,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team`);
             const data = await response.json();
             if (response.ok && data.has_team) {
-                renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
+                renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url, data.submission_status);
             }
         } catch (error) {
             console.error('Error fetching student team details:', error);
         }
     }
 
-    function renderTeamUI(teamName, teamCode, members, rollNo, githubUrl = '') {
+    function renderTeamUI(teamName, teamCode, members, rollNo, githubUrl = '', submissionStatus = null) {
         // Show roster card with team name
         const rosterCard = document.getElementById('team-roster-card');
         const rosterName = document.getElementById('roster-team-name');
@@ -285,6 +285,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (rosterCard) rosterCard.classList.remove('hidden');
+        const reviewStatus = document.getElementById('project-review-status');
+        if (reviewStatus) {
+            const messages = {
+                rejected: 'Your project submission was rejected. Update the title or abstract below and resubmit for mentor review.',
+                pending: 'Submitted · Awaiting mentor acceptance',
+                accepted: 'Your project has been accepted by a mentor.'
+            };
+            reviewStatus.hidden = !messages[submissionStatus];
+            reviewStatus.textContent = messages[submissionStatus] || '';
+            if (submissionStatus) reviewStatus.dataset.status = submissionStatus;
+        }
 
         // Hide join/create cards since user now has a team
         const joinCard = document.getElementById('join-team-card');
@@ -459,7 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             uploadError.textContent = message;
             uploadError.hidden = false;
         } else {
-            alert(message);
+            window.projectGuardFeedback.notify(message, 'error');
         }
     }
 
@@ -467,6 +478,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!uploadError) return;
         uploadError.textContent = '';
         uploadError.hidden = true;
+        uploadError.classList.remove('advisory');
     }
 
     // --- Remove File Logic --- //
@@ -570,12 +582,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Add subtle animation
         scoreContainer.style.animation = 'fadeIn 0.5s ease forwards';
 
-        // ENFORCE 30% THRESHOLD FOR SUBMISSION
-        if (data.plagiarism_percent <= 30) {
-            btnSubmit.disabled = false;
-        } else {
+        const threshold = data.submission_block_threshold;
+        if (typeof threshold === 'number' && data.plagiarism_percent > threshold) {
             btnSubmit.disabled = true;
-            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the 30% maximum. Revise the project before submitting.`);
+            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the configured ${threshold}% submission limit. Revise the project before submitting.`);
+        } else {
+            btnSubmit.disabled = false;
+            if (typeof threshold !== 'number') {
+                uploadError?.classList.add('advisory');
+                showUploadError('This similarity score is advisory. No calibrated submission-block threshold is configured yet.');
+            }
         }
     }
 
@@ -707,11 +723,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Render Team UI using helper
                     renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
                 } else {
-                    alert(data.detail || 'Failed to create team');
+                    window.projectGuardFeedback.notify(data.detail || 'Failed to create team', 'error');
                 }
             } catch (error) {
                 console.error('Create Team error:', error);
-                alert('Connection error. Is the server running?');
+                window.projectGuardFeedback.notify('Could not connect to the service. Check your connection and try again.', 'error');
             }
         });
     }
@@ -737,7 +753,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('Successfully joined the team!');
+                    window.projectGuardFeedback.notify('Successfully joined the team.', 'success');
                     joinTeamForm.style.display = 'none';
                     if (btnShowJoinTeam) btnShowJoinTeam.style.display = 'inline-flex';
                     joinTeamFormEl.reset();
@@ -745,11 +761,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Render Team UI using helper
                     renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
                 } else {
-                    alert(data.detail || data.error || 'Failed to join team');
+                    window.projectGuardFeedback.notify(data.detail || data.error || 'Failed to join team', 'error');
                 }
             } catch (error) {
                 console.error('Join Team error:', error);
-                alert('Connection error. Is the server running?');
+                window.projectGuardFeedback.notify('Could not connect to the service. Check your connection and try again.', 'error');
             }
         });
     }
@@ -803,11 +819,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnLeaveTeam.addEventListener('click', async () => {
             const activeUser = window.projectGuardProfile?.identifier;
             if (!activeUser) {
-                alert('Session expired. Please log in again.');
-                window.location.href = 'auth.html';
+                window.location.href = 'auth.html?notice=session-expired';
                 return;
             }
-            if (!confirm('Are you sure you want to leave this team?')) return;
+            if (!await window.projectGuardFeedback.confirm('Are you sure you want to leave this team?', {
+                title: 'Leave team', confirmLabel: 'Leave team'
+            })) return;
 
             try {
                 const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/leave-team`, {
@@ -816,7 +833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = await res.json();
 
                 if (res.ok) {
-                    alert('You have left the team.');
+                    window.projectGuardFeedback.notify('You have left the team.', 'success');
                     // Hide roster card
                     const rosterCard = document.getElementById('team-roster-card');
                     if (rosterCard) rosterCard.classList.add('hidden');
@@ -834,11 +851,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const resultCard = document.getElementById('team-creation-result');
                     if (resultCard) resultCard.classList.add('hidden');
                 } else {
-                    alert(data.detail || 'Failed to leave the team.');
+                    window.projectGuardFeedback.notify(data.detail || 'Failed to leave the team.', 'error');
                 }
             } catch (err) {
                 console.error(err);
-                alert('Connection error. Is the server running?');
+                window.projectGuardFeedback.notify('Could not connect to the service. Check your connection and try again.', 'error');
             }
         });
     }
@@ -949,13 +966,19 @@ async function submitProject() {
     const rollNo = window.projectGuardProfile?.identifier;
 
     if (!rollNo) {
-        alert("Session expired. Please log in again.");
-        window.location.href = "auth.html";
+        window.location.href = "auth.html?notice=session-expired";
         return;
     }
 
     if (!titleEl.value.trim()) {
-        alert("Please fill in the Project Title.");
+        const validationMessage = document.getElementById('upload-error');
+        if (validationMessage) {
+            validationMessage.textContent = 'Please fill in the Project Title.';
+            validationMessage.hidden = false;
+        } else {
+            window.projectGuardFeedback.notify('Please fill in the Project Title.', 'error');
+        }
+        titleEl.focus();
         return;
     }
 
@@ -981,7 +1004,13 @@ async function submitProject() {
         }
 
         const result = await res.json();
-        alert(result.message);
+        window.projectGuardFeedback.notify(result.message || 'Project submitted successfully.', 'success');
+        const reviewStatus = document.getElementById('project-review-status');
+        if (reviewStatus) {
+            reviewStatus.hidden = false;
+            reviewStatus.textContent = 'Submitted · Awaiting mentor acceptance';
+            reviewStatus.dataset.status = 'pending';
+        }
         btnSubmit.innerHTML = '<i class="ph ph-check"></i> Submitted';
         btnSubmit.style.background = "var(--status-verified)";
     } catch (err) {

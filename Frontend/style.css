@@ -303,6 +303,26 @@ body {
     max-width: 800px;
 }
 
+.project-review-status {
+    margin: 0 0 1.25rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    color: var(--text-main);
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.16);
+    line-height: 1.5;
+}
+.project-review-status[data-status="rejected"] {
+    color: var(--status-danger, #b42318);
+    background: var(--status-danger-bg, #fff1f0);
+    border-color: rgba(180, 35, 24, 0.2);
+}
+.project-review-status[data-status="accepted"] {
+    color: var(--status-verified, #047857);
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
 .glass-card {
     border-radius: var(--radius-lg);
     padding: 2.5rem;
@@ -407,6 +427,10 @@ textarea:focus {
     color: var(--status-danger, #b42318);
     font-size: 0.9rem;
     line-height: 1.4;
+}
+
+.upload-error.advisory {
+    color: var(--text-muted, #667085);
 }
 
 .file-info-bar {

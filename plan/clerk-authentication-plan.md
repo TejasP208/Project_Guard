@@ -51,9 +51,11 @@ Every API route that returns or changes application data must require authentica
    - Keep the secret key private on the backend.
    - Verify sign-in, sign-out, and protected API access over HTTPS.
 
-- [ ] **Add admin-controlled mentor approval last**
-   - Keep the current website mentor sign-up flow during the main authentication work.
-   - As the final implementation step, add an admin portal or another admin-controlled process for approving mentors or managing mentor account creation.
+- [x] **Add administrator-controlled enrollment**
+   - The admin portal issues single-use, identifier-bound codes for the student or mentor role.
+   - Only Clerk IDs in `ENROLLMENT_ADMIN_CLERK_USER_IDS` can issue/revoke codes or manage accounts.
+   - The administrator attests to recipient verification and records the method; the issuer Clerk ID is recorded with the code.
+   - Codes are shown once, hashed in PostgreSQL, expire within seven days, and can be revoked.
 
 - [ ] **Remove test data before real data is added**
     - Before allocating real student and project data, delete the fake test accounts and their related test data.
@@ -64,7 +66,7 @@ Every API route that returns or changes application data must require authentica
 - Students and mentors use one Clerk application, with separate portal UIs.
 - Existing test accounts will be linked manually to Clerk users.
 - Fake accounts and test data remain during development and will be deleted before real data is allocated.
-- Mentor approval/admin controls are the final implementation step.
+- A designated institutional enrollment administrator verifies recipients against authoritative records, issues codes, and delivers them privately through already verified institutional contact channels.
 - No API route that exposes application data will remain public.
 
 ## Authentication issue review (2026-10-04)

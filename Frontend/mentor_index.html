@@ -10,8 +10,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css?v=project-details-3">
+    <link rel="stylesheet" href="mentor_sytle.css?v=project-details-4">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="feedback.css">
+    <script src="feedback.js?v=accessible-feedback-1" defer></script>
     <script src="group_connect.js?v=project-visibility-1" defer></script>
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=portal-startup-3"></script>
@@ -399,6 +401,7 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" id="project-details-dismiss" type="button">Close</button>
+                <button class="btn btn-danger hidden" id="project-details-reject" type="button">Reject submission</button>
                 <button class="btn btn-primary hidden" id="project-details-accept" type="button">Accept this project</button>
             </div>
         </div>
@@ -558,7 +561,7 @@
                 if (file) {
                     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
                         picInput.value = '';
-                        window.alert('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.');
+                        window.projectGuardFeedback.notify('Choose a PNG, JPEG, WebP, or GIF image up to 1 MB.', 'error');
                         return;
                     }
                     const reader = new FileReader();
@@ -659,6 +662,28 @@
             let rosterProjectCatalog = new Map();
             const projectDetailsModal = document.getElementById('project-details-modal');
             const projectDetailsAccept = document.getElementById('project-details-accept');
+            const projectDetailsReject = document.getElementById('project-details-reject');
+
+            async function rejectProject(projectId, button) {
+                const confirmed = await window.projectGuardFeedback.confirm(
+                    'Reject this submission? The team’s project details will be kept, and they can edit and resubmit before a mentor accepts it.',
+                    { title: 'Reject project submission', confirmLabel: 'Reject submission' }
+                );
+                if (!confirmed) return;
+                button.disabled = true;
+                document.getElementById('project-details-error').textContent = '';
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reject`, { method: 'PATCH' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not reject project.');
+                    projectDetailsModal.classList.remove('active');
+                    window.projectGuardFeedback.notify(result.message || 'Project submission rejected.', 'success');
+                    await Promise.all([loadProjects(), loadStudents(), loadAssignedGroups(), loadDashboard()]);
+                } catch (error) {
+                    document.getElementById('project-details-error').textContent = error.message || 'Could not reject project.';
+                    button.disabled = false;
+                }
+            }
 
             async function acceptProject(projectId, button) {
                 button.disabled = true;
@@ -685,6 +710,7 @@
                 }
                 document.getElementById('project-details-github').replaceChildren('Not added yet');
                 projectDetailsAccept.classList.add('hidden');
+                projectDetailsReject.classList.add('hidden');
                 projectDetailsModal.classList.add('active');
                 try {
                     let project = rosterProjectCatalog.get(String(projectId));
@@ -733,6 +759,9 @@
                         projectDetailsAccept.dataset.projectId = String(project.id);
                         projectDetailsAccept.disabled = false;
                         projectDetailsAccept.classList.remove('hidden');
+                        projectDetailsReject.dataset.projectId = String(project.id);
+                        projectDetailsReject.disabled = false;
+                        projectDetailsReject.classList.remove('hidden');
                     }
                     document.getElementById('project-details-close').focus();
                 } catch (loadError) {
@@ -746,6 +775,7 @@
             document.getElementById('project-details-dismiss').addEventListener('click', closeProjectDetails);
             projectDetailsModal.addEventListener('click', event => { if (event.target === projectDetailsModal) closeProjectDetails(); });
             projectDetailsAccept.addEventListener('click', () => acceptProject(projectDetailsAccept.dataset.projectId, projectDetailsAccept));
+            projectDetailsReject.addEventListener('click', () => rejectProject(projectDetailsReject.dataset.projectId, projectDetailsReject));
 
             async function loadProjects() {
                 const assignedBody = document.querySelector('#assigned-projects-table tbody');
@@ -1080,7 +1110,9 @@
                     openRosterModal(student, button.dataset.action === 'edit');
                     return;
                 }
-                if (!confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`)) return;
+                if (!await window.projectGuardFeedback.confirm(`Remove ${student.student_name} from your mentor roster? Their student login will remain available.`, {
+                    title: 'Remove student from roster', confirmLabel: 'Remove student'
+                })) return;
                 button.disabled = true;
                 try {
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students/${student.id}`, { method: 'DELETE' });
@@ -1234,7 +1266,7 @@
                     await loadDashboard();
                 } catch (error) {
                     button.disabled = false;
-                    alert(error.message);
+                    window.projectGuardFeedback.notify(error.message, 'error');
                 }
             });
 
@@ -1431,7 +1463,9 @@
                         }
                         choices[select.dataset.prn] = select.value;
                     }
-                    if (!confirm('Replace every saved team membership and mentor roster row with this Excel sheet? Student-submitted projects will stay with their teams.')) return;
+                    if (!await window.projectGuardFeedback.confirm('Replace every saved team membership and mentor roster row with this Excel sheet? Student-submitted projects will stay with their teams.', {
+                        title: 'Replace all team data', confirmLabel: 'Replace all teams'
+                    })) return;
                     const form = new FormData();
                     form.append('file', file);
                     form.append('resolutions', JSON.stringify(choices));

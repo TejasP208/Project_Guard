@@ -46,6 +46,10 @@ def _apply_migrations(connection):
         columns = {column["name"] for column in inspector.get_columns("enrollment_codes")}
         if "role" not in columns:
             connection.exec_driver_sql("ALTER TABLE enrollment_codes ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'student'")
+        if "issued_by_clerk_user_id" not in columns:
+            connection.exec_driver_sql("ALTER TABLE enrollment_codes ADD COLUMN issued_by_clerk_user_id VARCHAR")
+        if "verification_method" not in columns:
+            connection.exec_driver_sql("ALTER TABLE enrollment_codes ADD COLUMN verification_method VARCHAR(32)")
     for table_name in ("students", "mentors"):
         if not inspector.has_table(table_name):
             continue
@@ -99,6 +103,21 @@ def _apply_migrations(connection):
         )
     if "mentor_assigned_at" not in project_columns:
         connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN mentor_assigned_at VARCHAR")
+    if "submission_status" not in project_columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE projects ADD COLUMN submission_status VARCHAR(16) NOT NULL DEFAULT 'pending'"
+        )
+    if "rejected_by_mentor_id" not in project_columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE projects ADD COLUMN rejected_by_mentor_id INTEGER "
+            "REFERENCES mentors(id) ON DELETE SET NULL"
+        )
+    if "rejected_at" not in project_columns:
+        connection.exec_driver_sql("ALTER TABLE projects ADD COLUMN rejected_at VARCHAR")
+    connection.exec_driver_sql(
+        "UPDATE projects SET submission_status = 'accepted' "
+        "WHERE assigned_mentor_id IS NOT NULL AND submission_status = 'pending'"
+    )
     connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_team_id "
         "ON projects (team_id) WHERE team_id IS NOT NULL"

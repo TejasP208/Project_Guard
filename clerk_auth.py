@@ -36,6 +36,14 @@ def _is_production_environment() -> bool:
     return os.getenv("APP_ENV", "").strip().lower() == "production" or os.getenv("RENDER", "").lower() == "true"
 
 
+def _origin_identity(value: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(value)
+    port = parsed.port
+    if (parsed.scheme.lower(), port) in {("https", 443), ("http", 80)}:
+        port = None
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), port
+
+
 def validate_production_clerk_config() -> None:
     """Fail startup when production would use development or incomplete keys."""
     if not _is_production_environment():
@@ -46,10 +54,26 @@ def validate_production_clerk_config() -> None:
         raise RuntimeError("Production requires a Clerk pk_live_ publishable key.")
     if not secret_key.startswith("sk_live_"):
         raise RuntimeError("Production requires a Clerk sk_live_ secret key.")
-    if len(os.getenv("RATE_LIMIT_HASH_KEY", "").strip()) < 32:
+    rate_limit_key = os.getenv("RATE_LIMIT_HASH_KEY", "").strip()
+    if len(rate_limit_key) < 32:
         raise RuntimeError("Production requires a separate RATE_LIMIT_HASH_KEY of at least 32 characters.")
+    if rate_limit_key == secret_key or rate_limit_key == publishable_key:
+        raise RuntimeError("RATE_LIMIT_HASH_KEY must be independent from Clerk keys.")
+    missing = [name for name in (
+        "GROQ_API_KEY",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "ENROLLMENT_ADMIN_CLERK_USER_IDS",
+    ) if not os.getenv(name, "").strip()]
+    if missing:
+        raise RuntimeError("Production is missing required backend environment values: " + ", ".join(missing))
     # Validate and require exact production HTTPS origins before serving traffic.
-    _authorized_parties()
+    authorized = _authorized_parties()
+    cors = [origin.strip().rstrip("/") for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+    if not cors:
+        raise RuntimeError("CORS_ALLOWED_ORIGINS must list the deployed HTTPS frontend origin(s).")
+    if {_origin_identity(origin) for origin in authorized} != {_origin_identity(origin) for origin in cors}:
+        raise RuntimeError("CORS_ALLOWED_ORIGINS and CLERK_AUTHORIZED_PARTIES must contain the same frontend origins.")
 
 
 def require_clerk_user_id(request: Request) -> str:

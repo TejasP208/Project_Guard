@@ -34,6 +34,8 @@ class EnrollmentCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="student", server_default="student")
+    issued_by_clerk_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    verification_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     roll_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     year: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -63,6 +65,11 @@ class Project(Base):
         ForeignKey("mentors.id", ondelete="SET NULL"), nullable=True, index=True
     )
     mentor_assigned_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    submission_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    rejected_by_mentor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mentors.id", ondelete="SET NULL"), nullable=True
+    )
+    rejected_at: Mapped[str | None] = mapped_column(String, nullable=True)
     # Cloudflare Qwen3 embeddings are 1024-dimensional and nullable until indexed.
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(1024), nullable=True)
 

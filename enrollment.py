@@ -1,11 +1,12 @@
 """Student and mentor enrollment grants issued by authorized administrators."""
 import argparse
 import hashlib
+import os
 import secrets
 import time
 
 from fastapi import HTTPException
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, text
 from models import EnrollmentCode, Mentor, Student
 
 
@@ -47,29 +48,45 @@ def main():
     issue.add_argument("--role", choices=("student", "mentor"), default="student")
     issue.add_argument("--roll-no", required=True, help="Student roll number or mentor name")
     issue.add_argument("--year", default="", help="Required for student enrollment")
-    issue.add_argument("--expires-hours", type=int, default=168)
+    issue.add_argument("--expires-hours", type=int, default=72)
+    issue.add_argument("--verified-by-clerk-user-id", required=True,
+                       help="Allowlisted administrator who verified the recipient")
+    issue.add_argument("--verification-method", required=True,
+                       choices=("official_roster", "institutional_contact", "in_person"))
     revoke = commands.add_parser("revoke")
     revoke.add_argument("--id", type=int, required=True)
     args = parser.parse_args()
-    from database import SessionLocal, engine
-    # Also usable before starting FastAPI; create only this additive table.
+    from database import SessionLocal, engine, migrate_database
+    # Also usable before starting FastAPI; create this table then apply locked migrations.
     EnrollmentCode.__table__.create(engine, checkfirst=True)
-    if "role" not in {column["name"] for column in inspect(engine).get_columns("enrollment_codes")}:
-        with engine.begin() as connection:
-            connection.exec_driver_sql("ALTER TABLE enrollment_codes ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'student'")
+    migrate_database()
     with SessionLocal() as db:
         if args.command == "issue":
             roll, year = args.roll_no.strip(), args.year.strip()
-            if not roll or (args.role == "student" and not year) or len(roll) > 64 or len(year) > 64 or not 1 <= args.expires_hours <= 8760:
-                parser.error("Provide an identifier up to 64 characters, a student year, and expiry between 1 and 8760 hours.")
+            if not roll or (args.role == "student" and not year) or len(roll) > 64 or len(year) > 64 or not 1 <= args.expires_hours <= 168:
+                parser.error("Provide an identifier up to 64 characters, a student year, and expiry between 1 and 168 hours.")
+            allowed_admins = {value.strip() for value in
+                              os.getenv("ENROLLMENT_ADMIN_CLERK_USER_IDS", "").split(",") if value.strip()}
+            if args.verified_by_clerk_user_id not in allowed_admins:
+                parser.error("The verifier must be listed in ENROLLMENT_ADMIN_CLERK_USER_IDS.")
             model, field = (Student, Student.roll_no) if args.role == "student" else (Mentor, Mentor.username)
             existing = db.query(model).filter(func.lower(func.trim(field)) == roll.lower()).all()
             if len(existing) > 1 or any(row.clerk_user_id for row in existing):
                 parser.error("This identifier already has a linked or ambiguous profile.")
             code = secrets.token_urlsafe(24)
             now = int(time.time())
+            outstanding = db.query(EnrollmentCode).filter(
+                EnrollmentCode.role == args.role,
+                func.lower(func.trim(EnrollmentCode.roll_no)) == roll.lower(),
+                EnrollmentCode.used_at.is_(None), EnrollmentCode.revoked_at.is_(None),
+                EnrollmentCode.expires_at > now,
+            ).with_for_update().all()
+            for previous in outstanding:
+                previous.revoked_at = now
             grant = EnrollmentCode(role=args.role, code_hash=code_hash(code), roll_no=roll, year=year,
-                                   created_at=now, expires_at=now + args.expires_hours * 3600)
+                                   created_at=now, expires_at=now + args.expires_hours * 3600,
+                                   issued_by_clerk_user_id=args.verified_by_clerk_user_id,
+                                   verification_method=args.verification_method)
             db.add(grant)
             db.commit()
             print(f"Enrollment ID: {grant.id}\nPortal: {args.role}\nIdentifier: {roll}\nYear: {year}\nCode: {code}\nExpires in: {args.expires_hours} hours")

@@ -71,8 +71,28 @@ def main() -> None:
     parser.add_argument("csv_path", type=Path)
     args = parser.parse_args()
 
+    with args.csv_path.open(newline="", encoding="utf-8-sig") as source:
+        reader = csv.DictReader(source)
+        if not reader.fieldnames or not REQUIRED_COLUMNS.issubset(reader.fieldnames):
+            raise ValueError(f"CSV needs these columns: {', '.join(sorted(REQUIRED_COLUMNS))}")
+        labels = [(row.get("label") or "").strip().lower() for row in reader]
+    if not labels:
+        print("No labeled cases found. Add representative similar and unrelated submissions before calibration.")
+        return
+    invalid_labels = [label for label in labels if label not in LABELS]
+    if invalid_labels:
+        raise ValueError("Every row label must be similar or unrelated")
+    counts = {label: labels.count(label) for label in LABELS}
+    if min(counts.values()) < 10:
+        print(
+            "Insufficient labeled cases for calibration "
+            f"(similar={counts['similar']}, unrelated={counts['unrelated']}); "
+            "collect at least 10 of each label. No provider or database scoring was run."
+        )
+        return
+
     cases = score_cases(args.csv_path)
-    print("\nCurrent frontend cutoff:")
+    print("\nHistorical 30% cutoff reference (not enforced by default):")
     report_threshold(cases, 30)
     if min(sum(label == kind for _, label in cases) for kind in LABELS) < 10:
         print("Collect at least 10 cases per label before considering a new cutoff.")
@@ -91,7 +111,8 @@ def main() -> None:
         f"{min(best_thresholds)}-{max(best_thresholds)}% "
         f"(balanced accuracy {best_accuracy:.2f})."
     )
-    print("Review errors on separate examples before changing the frontend cutoff.")
+    print("Review errors on separate examples before configuring a hard-block cutoff.")
+    print("This script evaluates the configured scoring weights; it does not optimize or validate those weights.")
 
 
 if __name__ == "__main__":

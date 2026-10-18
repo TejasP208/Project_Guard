@@ -1,5 +1,7 @@
 # Merge and deployment verification — 2026-10-07
 
+> **Current runtime-verification status (2026-10-18): NOT RUN.** Hosting has not been created. The dated results below record checks performed on 2026-10-07 and do not satisfy PostgreSQL multi-worker, deployed Clerk/browser, trusted-proxy, or deployed provider verification. Use [runtime-verification-checklist.md](runtime-verification-checklist.md) after staging is available.
+
 ## Result
 
 The automated regression checks and the live database/AI connectivity checks listed below pass. Public deployment is not cleared: production configuration, authoritative identity enrollment, and real browser sign-in/redirect checks remain open. This is not a claim that every browser or concurrent PostgreSQL operation has been exercised.

@@ -46,6 +46,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         error.textContent = message;
     };
 
+    if (new URLSearchParams(window.location.search).get('notice') === 'session-expired') {
+        showAuthError(loginForm, 'Your session expired. Sign in again to continue.');
+    }
+
     const clerkErrorMessage = (error) => {
         if (error?.message === 'TOKEN_NOT_ACTIVE_YET') {
             return 'The server clock has not caught up with this new session. Please try again shortly. If this continues, contact the administrator.';

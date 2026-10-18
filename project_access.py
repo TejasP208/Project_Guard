@@ -9,6 +9,7 @@ from models import Mentor, Project, Team, TeamMember
 def mentor_projects(db, mentor_id: int):
     """Legacy/orphaned rows stay private until their relationships are verified."""
     return db.query(Project).join(Team, Project.team_id == Team.id).filter(
+        Project.submission_status != "rejected",
         or_(Project.assigned_mentor_id.is_(None), Project.assigned_mentor_id == mentor_id)
     )
 
@@ -22,7 +23,8 @@ def project_summary(project, mentor_id: int):
         "project_name": project.project_name,
         "team": project.team_name,
         "assigned_to_me": project.assigned_mentor_id == mentor_id,
-        "can_assign": project.assigned_mentor_id is None,
+        "can_assign": project.assigned_mentor_id is None and project.submission_status == "pending",
+        "submission_status": "accepted" if project.assigned_mentor_id is not None else project.submission_status,
     }
 
 

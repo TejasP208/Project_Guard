@@ -1130,6 +1130,8 @@ input[type="password"]:focus {
 .is-pending .project-details-check-marker { color: var(--text-muted); background: rgba(100, 116, 139, 0.14); }
 .project-details-abstract { white-space: pre-wrap; }
 .project-details-modal .modal-actions { flex: none; margin-top: auto; border-top: 1px solid rgba(100, 116, 139, 0.15); background: rgba(255, 255, 255, 0.9); }
+.project-details-modal .btn-danger { color: #b42318; background: #fff; border: 1px solid rgba(180, 35, 24, 0.28); }
+.project-details-modal .btn-danger:hover { background: #fff1f0; }
 .mentor-table tr[data-open-project-id] { cursor: pointer; }
 .mentor-table tr[data-open-project-id]:hover { background: rgba(99, 102, 241, 0.06); }
 @media (max-width: 600px) {

@@ -146,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="project-actions">
                             <span class="chip ${chipClass}"><i class="ph ${chipIcon}"></i> ${chipText}</span>
                             ${p.can_assign ? `<button class="btn-table-action" type="button" data-assign-project-id="${escapeHtml(p.id)}">Assign to me</button>` : `<span class="chip verified">${p.assigned_to_me ? 'Assigned to me' : 'Assigned'}</span>`}
+                            ${p.can_assign ? `<button class="btn-table-action" type="button" data-reject-project-id="${escapeHtml(p.id)}">Reject</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -158,6 +159,26 @@ document.addEventListener('DOMContentLoaded', () => {
             cb.addEventListener('change', updateProjectDisplay);
         });
         gridContainer.addEventListener('click', async event => {
+            const rejectButton = event.target.closest('[data-reject-project-id]');
+            if (rejectButton) {
+                const confirmed = await window.projectGuardFeedback.confirm(
+                    'Reject this submission? The team’s project details will be kept, and they can edit and resubmit before a mentor accepts it.',
+                    { title: 'Reject project submission', confirmLabel: 'Reject submission' }
+                );
+                if (!confirmed) return;
+                rejectButton.disabled = true;
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(rejectButton.dataset.rejectProjectId)}/reject`, { method: 'PATCH' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || 'Could not reject project');
+                    window.projectGuardFeedback.notify(result.message || 'Project submission rejected.', 'success');
+                    await renderProjectListUI();
+                } catch (error) {
+                    window.projectGuardFeedback.notify(error.message || 'Could not reject project', 'error');
+                    rejectButton.disabled = false;
+                }
+                return;
+            }
             const button = event.target.closest('[data-assign-project-id]');
             if (!button) return;
             button.disabled = true;
@@ -167,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) throw new Error(result.detail || 'Could not assign project');
                 await renderProjectListUI();
             } catch (error) {
-                alert(error.message || 'Could not assign project');
+                window.projectGuardFeedback.notify(error.message || 'Could not assign project', 'error');
                 button.disabled = false;
             }
         });
