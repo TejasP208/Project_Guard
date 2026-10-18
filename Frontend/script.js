@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not respond to invitation.');
             if (result.status === 'accepted') {
-                renderTeamUI(result.team_name, result.team_code, result.members, activeUser);
+                renderTeamUI(result.team_name, result.team_code, result.members, activeUser, result.github_url);
                 notificationsModal.classList.remove('active');
             }
             await loadTeamInvitations();
@@ -233,14 +233,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team`);
             const data = await response.json();
             if (response.ok && data.has_team) {
-                renderTeamUI(data.team_name, data.team_code, data.members, rollNo);
+                renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
             }
         } catch (error) {
             console.error('Error fetching student team details:', error);
         }
     }
 
-    function renderTeamUI(teamName, teamCode, members, rollNo) {
+    function renderTeamUI(teamName, teamCode, members, rollNo, githubUrl = '') {
         // Show roster card with team name
         const rosterCard = document.getElementById('team-roster-card');
         const rosterName = document.getElementById('roster-team-name');
@@ -249,6 +249,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (rosterName && teamName) rosterName.textContent = 'TEAM: ' + teamName.toUpperCase();
         if (rosterCode && teamCode) rosterCode.textContent = teamCode;
+        const githubInput = document.getElementById('roster-github-url');
+        if (githubInput) githubInput.value = githubUrl || '';
 
         // Render all current members dynamically
         if (rosterMembers && members) {
@@ -289,6 +291,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (joinCard) joinCard.style.display = 'none';
         const createCard = document.getElementById('create-team-card');
         if (createCard) createCard.style.display = 'none';
+    }
+
+    const teamGithubForm = document.getElementById('team-github-form');
+    if (teamGithubForm) {
+        teamGithubForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            const input = document.getElementById('roster-github-url');
+            const status = document.getElementById('team-github-status');
+            const button = teamGithubForm.querySelector('button[type="submit"]');
+            button.disabled = true;
+            status.textContent = 'Saving…';
+            try {
+                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/my-team/github`, {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ github_url: input.value })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'Could not save the link.');
+                input.value = result.github_url || '';
+                status.textContent = result.github_url ? 'GitHub link saved.' : 'GitHub link removed.';
+            } catch (error) {
+                status.textContent = error.message || 'Could not save the link.';
+            } finally {
+                button.disabled = false;
+            }
+        });
     }
 
     // Elements
@@ -662,7 +690,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     body: JSON.stringify({
                         team_name: teamName,
                         description: description,
-                        max_members: parseInt(maxMembers)
+                        max_members: parseInt(maxMembers),
+                        github_url: document.getElementById('team-github')?.value || ''
                     })
                 });
 
@@ -676,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     createTeamFormEl.reset();
 
                     // Render Team UI using helper
-                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo);
+                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
                 } else {
                     alert(data.detail || 'Failed to create team');
                 }
@@ -714,7 +743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     joinTeamFormEl.reset();
 
                     // Render Team UI using helper
-                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo);
+                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
                 } else {
                     alert(data.detail || data.error || 'Failed to join team');
                 }

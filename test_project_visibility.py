@@ -94,6 +94,23 @@ class ProjectVisibilityTests(unittest.TestCase):
             self.assertEqual(self.client.get(f"/api/projects/{project_id}", headers=self.headers()).status_code, 404)
         self.assertEqual(self.client.get("/api/projects/4", headers=self.headers("student:S1")).status_code, 403)
 
+    def test_team_member_can_save_github_link_visible_in_mentor_roster(self):
+        with self.sessions() as db:
+            db.add(MentorStudent(mentor_name="mentor1", mentor_key="mentor1", student_name="Student One",
+                                 prn="S1", group_name="4"))
+            db.commit()
+        url = "https://github.com/example/project-guard"
+        response = self.client.patch("/my-team/github", headers=self.headers("student:S1"), json={"github_url": url})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["github_url"], url)
+        roster = self.client.get("/mentor/students", headers=self.headers()).json()
+        self.assertEqual(roster[0]["github_url"], url)
+        invalid = self.client.patch("/my-team/github", headers=self.headers("student:S1"),
+                                    json={"github_url": "https://github.com.evil.example/a/b"})
+        self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(self.client.patch("/my-team/github", headers=self.headers(),
+                                           json={"github_url": url}).status_code, 403)
+
     def test_axiom_rejects_legacy_orphan_other_owner_and_spoofed_context(self):
         for project_id in (1, 2, 5, 6, 7):
             response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": project_id, "question": "Review"})

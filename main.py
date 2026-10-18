@@ -560,6 +560,20 @@ class CreateTeamRequest(StrictRequest):
     team_name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
     max_members: int = Field(default=4, ge=2, le=10)
+    github_url: str = Field(default="", max_length=300)
+
+class TeamGithubRequest(StrictRequest):
+    github_url: str = Field(default="", max_length=300)
+
+def validated_github_url(value: str) -> str | None:
+    url = value.strip()
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or parsed.netloc != "github.com" or parsed.query or parsed.fragment
+            or len([part for part in parsed.path.split("/") if part]) != 2):
+        raise HTTPException(status_code=422, detail="Enter a GitHub repository URL such as https://github.com/owner/repository.")
+    return url
 
 class JoinTeamRequest(StrictRequest):
     team_code: str = Field(min_length=4, max_length=12, pattern=r"^[A-Za-z0-9]+$")
@@ -687,6 +701,7 @@ def create_team(data: CreateTeamRequest, request: Request):
                 team_name=data.team_name.strip(),
                 team_code=code,
                 description=data.description,
+                github_url=validated_github_url(data.github_url),
                 max_members=data.max_members,
                 year=student.year,
                 created_by_student_id=student.id,
@@ -706,6 +721,7 @@ def create_team(data: CreateTeamRequest, request: Request):
                 "message": "Team created successfully",
                 "team_code": code,
                 "team_name": new_team.team_name,
+                "github_url": new_team.github_url,
                 "members": member_list
             }
         except HTTPException:
@@ -750,6 +766,7 @@ def join_team(data: JoinTeamRequest, request: Request):
                 "message": "Successfully joined the team",
                 "team_name": team.team_name,
                 "team_code": team.team_code,
+                "github_url": team.github_url,
                 "members": member_list
             }
         except HTTPException:
@@ -758,6 +775,24 @@ def join_team(data: JoinTeamRequest, request: Request):
             db.rollback()
             logger.error("Team join failed (%s)", type(e).__name__)
             raise HTTPException(status_code=500, detail="Could not join the team.") from e
+
+@app.patch("/my-team/github")
+def update_team_github(data: TeamGithubRequest, request: Request):
+    roll_no = require_profile_role(request, "student")["identifier"]
+    github_url = validated_github_url(data.github_url)
+    with SessionLocal() as db:
+        member = db.query(TeamMember).filter(
+            func.lower(TeamMember.roll_no) == roll_no.strip().lower()
+        ).first()
+        if not member:
+            raise HTTPException(status_code=404, detail="Join a team before adding a GitHub repository.")
+        team = db.query(Team).filter(Team.id == member.team_id).with_for_update().first()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found.")
+        team.github_url = github_url
+        db.commit()
+        return {"github_url": team.github_url}
+
 
 @app.get("/get-student-team")
 def get_student_team(request: Request):
@@ -781,6 +816,7 @@ def get_student_team(request: Request):
                 "has_team": True,
                 "team_name": team.team_name,
                 "team_code": team.team_code,
+                "github_url": team.github_url,
                 "members": member_list
             }
         except SQLAlchemyError as e:
@@ -1283,7 +1319,7 @@ async def import_all_teams(
 
 
 @app.get("/mentor/students")
-def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
+def get_mentor_students(request: Request) -> list[dict[str, str | int | None]]:
     mentor_user = require_profile_role(request, "mentor")["identifier"]
     with SessionLocal() as db:
         mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
@@ -1293,10 +1329,11 @@ def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
             MentorStudent.mentor_key == mentor_key(mentor.username)
         ).order_by(MentorStudent.student_name).all()
         roster = roster_for_project_owners(db, roster)
-        result: list[dict[str, str | int]] = []
+        result: list[dict[str, str | int | None]] = []
         for entry in roster:
             team_name = entry.group_name or "No Group"
             project_name = entry.project_name or "No Project"
+            github_url = None
             if entry.prn:
                 member = db.query(TeamMember).filter(
                     func.lower(TeamMember.roll_no) == entry.prn.strip().lower()
@@ -1305,6 +1342,7 @@ def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
                     team = db.query(Team).filter(Team.id == member.team_id).first()
                     if team:
                         team_name = team.team_name or "No Group"
+                        github_url = team.github_url
                         project = db.query(Project).filter(Project.team_id == team.id).first()
                         if project and project.assigned_mentor_id in (None, mentor.id):
                             project_name = project.project_name or "No Project"
@@ -1320,6 +1358,7 @@ def get_mentor_students(request: Request) -> list[dict[str, str | int]]:
                 "group_number": entry.group_name or "",
                 "team_name": team_name,
                 "project_name": project_name,
+                "github_url": github_url,
                 "submissions": "1 / 1" if project_name != "No Project" else "0 / 1",
             })
         return result
