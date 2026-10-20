@@ -148,7 +148,12 @@
                 <p id="project-list-feedback" class="student-roster-error" role="alert" aria-live="polite"></p>
                 <div class="glass-card mentor-table-card">
                     <div class="table-header-bar">
-                        <h3><i class="ph ph-users-three"></i> My Assigned Groups</h3>
+                        <h3><i class="ph ph-users-three"></i> All Team Projects</h3>
+                        <div class="project-year-filters" id="project-year-filters" aria-label="Filter by year">
+                            <button type="button" data-year="2" aria-pressed="false">SE</button>
+                            <button type="button" data-year="3" aria-pressed="false">TE</button>
+                            <button type="button" data-year="4" aria-pressed="false">BE</button>
+                        </div>
                         <div class="table-search">
                             <i class="ph ph-magnifying-glass"></i>
                             <input type="text" placeholder="Search projects..." id="project-search">
@@ -160,16 +165,16 @@
                                 <tr>
                                     <th>Group</th>
                                     <th>Project Name</th>
-                                    <th>Details</th>
+                                    <th>Year</th><th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="3">Loading assigned groups…</td></tr>
+                                <tr><td colspan="4">Loading teams…</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div class="glass-card mentor-table-card" style="margin-top: 24px;">
+                <div class="glass-card mentor-table-card hidden" style="margin-top: 24px;">
                     <div class="table-header-bar">
                         <h3><i class="ph ph-clock"></i> Submitted — Awaiting Acceptance</h3>
                     </div>
@@ -378,6 +383,8 @@
                 <dl class="project-details-grid">
                     <div><dt>Group number</dt><dd id="project-details-group"></dd></div>
                     <div><dt>Academic year</dt><dd id="project-details-year"></dd></div>
+                    <div><dt>Department</dt><dd id="project-details-department"></dd></div>
+                    <div><dt>Mentor</dt><dd id="project-details-mentor"></dd></div>
                     <div class="project-details-wide"><dt>Team</dt><dd id="project-details-team"></dd></div>
                     <div class="project-details-wide"><dt>Students</dt><dd id="project-details-members"></dd></div>
                 </dl>
@@ -606,7 +613,7 @@
         {
             const navConfig = {
                 'nav-dashboard':     { view: 'view-dashboard',     title: 'Mentor Dashboard',  subtitle: 'Overview of your assigned student groups' },
-                'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Manage and review all assigned projects' },
+                'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Browse all team projects' },
                 'nav-student-list':  { view: 'view-student-list',  title: 'Student List',      subtitle: 'View all students under your mentorship' },
                 'nav-group-connect': { view: 'view-group-connect', title: 'Group Connect',     subtitle: 'Make groups to chat with the assigned student groups' },
             };
@@ -659,6 +666,8 @@
             // Load Projects from API
             // ============================================
             let projectCatalog = new Map();
+            let teamProjectCatalog = new Map();
+            let selectedProjectYear = '';
             let rosterProjectCatalog = new Map();
             const projectDetailsModal = document.getElementById('project-details-modal');
             const projectDetailsAccept = document.getElementById('project-details-accept');
@@ -713,17 +722,19 @@
                 projectDetailsReject.classList.add('hidden');
                 projectDetailsModal.classList.add('active');
                 try {
-                    let project = rosterProjectCatalog.get(String(projectId));
+                    let project = teamProjectCatalog.get(String(projectId)) || rosterProjectCatalog.get(String(projectId));
                     if (!project) {
                         const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}`);
                         project = await response.json();
                         if (!response.ok) throw new Error(typeof project.detail === 'string' ? project.detail : 'Could not load project.');
                     }
                     document.getElementById('project-details-title').textContent = project.project_name || 'Not yet assigned';
-                    document.getElementById('project-details-status').textContent = project.roster_only ? 'Assigned in mentor roster' : project.can_assign ? 'Submitted · Awaiting acceptance' : 'Assigned to you';
+                    document.getElementById('project-details-status').textContent = project.project_name ? 'Project selected' : 'Project not yet selected';
                     document.getElementById('project-details-team').textContent = project.team || '—';
                     document.getElementById('project-details-group').textContent = project.group_no || 'Assigned after acceptance';
                     document.getElementById('project-details-year').textContent = project.year || '—';
+                    document.getElementById('project-details-department').textContent = (project.department || 'aiml').toUpperCase();
+                    document.getElementById('project-details-mentor').textContent = project.mentor_name || 'Not assigned';
                     document.getElementById('project-details-members').textContent = project.members.length ? project.members.join(', ') : 'No current members';
                     document.getElementById('project-details-project-name').textContent = project.project_name || 'Not yet assigned';
                     if (project.github_url) {
@@ -738,6 +749,7 @@
                         }
                     }
                     const checklist = document.getElementById('project-details-checklist');
+                    checklist.closest('.project-details-section').classList.add('hidden');
                     const steps = [
                         ['Team assigned', true],
                         ['Project name provided', Boolean(project.project_name)],
@@ -755,7 +767,7 @@
                         checklist.append(item);
                     }
                     document.getElementById('project-details-abstract').textContent = project.project_abstract || 'No abstract provided.';
-                    if (project.can_assign) {
+                    if (project.can_assign && !teamProjectCatalog.has(String(projectId))) {
                         projectDetailsAccept.dataset.projectId = String(project.id);
                         projectDetailsAccept.disabled = false;
                         projectDetailsAccept.classList.remove('hidden');
@@ -779,72 +791,39 @@
 
             async function loadProjects() {
                 const assignedBody = document.querySelector('#assigned-projects-table tbody');
-                const pendingBody = document.querySelector('#pending-projects-table tbody');
-                if (!assignedBody || !pendingBody) return;
-                assignedBody.innerHTML = '<tr><td colspan="3">Loading assigned groups…</td></tr>';
-                pendingBody.innerHTML = '<tr><td colspan="6">Loading submitted projects…</td></tr>';
-
+                if (!assignedBody) return;
+                assignedBody.innerHTML = '<tr><td colspan="4">Loading teams…</td></tr>';
                 try {
-                    const projectResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
-                    if (!projectResponse.ok) throw new Error('Failed to fetch projects');
-                    const projects = await projectResponse.json();
-                    let roster = [];
-                    try {
-                        const rosterResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students`);
-                        if (rosterResponse.ok) roster = await rosterResponse.json();
-                    } catch (rosterError) {
-                        console.warn('Could not load assigned mentor roster:', rosterError);
-                    }
-                    projectCatalog = new Map(projects.map(project => [String(project.id), project]));
-                    const assigned = projects.filter(project => project.assigned_to_me);
-                    const pending = projects.filter(project => project.can_assign);
-                    const canonicalTeams = new Set(projects.map(project => project.team).filter(Boolean));
-                    for (const student of roster) {
-                        for (const project of projects) {
-                            if (project.team === student.team_name && student.github_url) project.github_url = student.github_url;
-                        }
-                    }
-                    rosterProjectCatalog = new Map();
-                    for (const student of roster) {
-                        const team = student.team_name !== 'No Group' ? student.team_name : (student.group_number ? `Group ${student.group_number}` : '');
-                        if (!team || canonicalTeams.has(team)) continue;
-                        const id = `roster:${team}`;
-                        let entry = rosterProjectCatalog.get(id);
-                        if (!entry) {
-                            const match = /^Group\s+(\d+)$/i.exec(team);
-                            entry = { id, team, group_no: match ? match[1] : student.group_number,
-                                project_name: student.project_name === 'No Project' ? '' : student.project_name,
-                                year: student.year, members: [], project_abstract: '',
-                                github_url: student.github_url, roster_only: true };
-                            rosterProjectCatalog.set(id, entry);
-                        }
-                        if (student.prn) entry.members.push(`${student.student_name || student.prn} (${student.prn})`);
-                        if (!entry.project_name && student.project_name !== 'No Project') entry.project_name = student.project_name;
-                    }
-                    const rosterProjects = [...rosterProjectCatalog.values()];
-                    assignedBody.innerHTML = assigned.length || rosterProjects.length ? [...assigned, ...rosterProjects].map(project => `
-                        <tr data-open-project-id="${escapeHtml(project.id)}">
-                            <td>${escapeHtml(project.group_no ? `Group ${project.group_no}` : project.team || 'Group —')}</td>
-                            <td class="project-name">${escapeHtml(project.project_name || 'Not yet assigned')}</td>
-                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
-                        </tr>`).join('') : '<tr><td colspan="3">No groups assigned to you yet.</td></tr>';
-                    pendingBody.innerHTML = pending.length ? pending.map(project => `
-                        <tr data-open-project-id="${escapeHtml(project.id)}">
-                            <td class="project-name">${escapeHtml(project.project_name || 'Untitled')}</td>
-                            <td>${escapeHtml(project.team || '—')}</td>
-                            <td>${escapeHtml(project.year || '—')}</td>
-                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
-                            <td><button class="btn btn-primary" type="button" data-assign-project-id="${escapeHtml(project.id)}">Accept</button></td>
-                            <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(project.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                        </tr>`).join('') : '<tr><td colspan="6">No submissions awaiting acceptance.</td></tr>';
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/team-projects`);
+                    if (!response.ok) throw new Error('Failed to fetch teams');
+                    const teams = await response.json();
+                    teamProjectCatalog = new Map(teams.map(team => [String(team.id), team]));
+                    const visible = teams.filter(team => !selectedProjectYear || String(team.year) === selectedProjectYear);
+                    assignedBody.innerHTML = visible.length ? visible.map(team => `
+                        <tr>
+                            <td>Group ${escapeHtml(team.group_no)}</td>
+                            <td class="project-name">${escapeHtml(team.project_name || 'Not yet selected')}</td>
+                            <td>${escapeHtml(({2:'SE',3:'TE',4:'BE'})[String(team.year)] || team.year || '—')}</td>
+                            <td class="project-row-actions">
+                                <button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(team.id)}" aria-label="Information for group ${escapeHtml(team.group_no)}"><i class="ph ph-info"></i> Info</button>
+                                <button class="btn-axiom-ai" type="button" data-team-ai-id="${escapeHtml(team.id)}"><i class="ph ph-sparkle"></i> AI chat</button>
+                            </td>
+                        </tr>`).join('') : '<tr><td colspan="4">No teams found for this year.</td></tr>';
                     document.getElementById('project-search').dispatchEvent(new Event('input'));
-
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                    assignedBody.innerHTML = '<tr><td colspan="3">Could not load assigned groups.</td></tr>';
-                    pendingBody.innerHTML = '<tr><td colspan="6">Could not load submitted projects.</td></tr>';
+                    assignedBody.innerHTML = '<tr><td colspan="4">Could not load teams.</td></tr>';
                 }
             }
+            document.getElementById('project-year-filters').addEventListener('click', event => {
+                const button = event.target.closest('[data-year]');
+                if (!button) return;
+                selectedProjectYear = selectedProjectYear === button.dataset.year ? '' : button.dataset.year;
+                document.querySelectorAll('#project-year-filters [data-year]').forEach(item => {
+                    item.setAttribute('aria-pressed', String(item.dataset.year === selectedProjectYear));
+                });
+                loadProjects();
+            });
 
             document.getElementById('view-project-list').addEventListener('click', event => {
                 const accept = event.target.closest('[data-assign-project-id]');
@@ -889,6 +868,16 @@
                 setTimeout(() => axiomInput.focus(), 100);
             }
 
+            function openTeamAiPreview(team) {
+                selectedAxiomProject = null;
+                document.getElementById('axiom-project-context').textContent = `${team.project_name || 'Not yet selected'} · Group ${team.group_no}`;
+                axiomStream.innerHTML = '';
+                appendAxiomMessage('assistant', 'Project AI chat is coming soon. This space will answer questions using the team’s project information.');
+                document.getElementById('axiom-chat-form').classList.add('hidden');
+                axiomError.textContent = '';
+                axiomModal.classList.add('active');
+            }
+
             function closeAxiomProject() {
                 if (axiomRequestController) axiomRequestController.abort();
                 axiomRequestController = null;
@@ -896,6 +885,12 @@
             }
 
             document.getElementById('view-project-list').addEventListener('click', event => {
+                const teamButton = event.target.closest('[data-team-ai-id]');
+                if (teamButton) {
+                    const team = teamProjectCatalog.get(teamButton.dataset.teamAiId);
+                    if (team) openTeamAiPreview(team);
+                    return;
+                }
                 const button = event.target.closest('.btn-axiom-ai[data-project-id]');
                 if (!button) return;
                 const project = projectCatalog.get(button.dataset.projectId);

@@ -724,6 +724,7 @@ def create_team(data: CreateTeamRequest, request: Request):
                 github_url=validated_github_url(data.github_url),
                 max_members=data.max_members,
                 year=student.year,
+                department=student.department or "aiml",
                 created_by_student_id=student.id,
             )
             db.add(new_team)
@@ -965,6 +966,7 @@ def _save_project_submission(data: ProjectSubmission, request: Request):
             # Selection order is assigned by the mentor and survives later edits.
             project.project_name = project_name
             project.project_abstract = project_abstract
+            team.project_abstract = project_abstract
             project.team_name = team.team_name
             project.submitted_by_student_id = student.id
             if project.assigned_mentor_id is None:
@@ -1061,6 +1063,44 @@ def list_projects(request: Request):
             raise HTTPException(status_code=404, detail="Mentor account not found.")
         projects = mentor_projects(db, mentor.id).order_by(Project.id.desc()).all()
         return [project_summary(project, mentor.id) for project in projects]
+
+
+@app.get("/mentor/team-projects")
+def list_mentor_team_projects(request: Request):
+    """All current teams for the mentor directory, including teams without a submission."""
+    mentor_user = require_profile_role(request, "mentor")["identifier"]
+    with SessionLocal() as db:
+        mentor = db.query(Mentor).filter(func.lower(Mentor.username) == mentor_user.strip().lower()).first()
+        if not mentor:
+            raise HTTPException(status_code=404, detail="Mentor account not found.")
+        teams = db.query(Team).order_by(Team.id).all()
+        result = []
+        roster_names = {
+            row.prn.strip().casefold(): row.student_name
+            for row in db.query(MentorStudent).filter(MentorStudent.prn.is_not(None)).all()
+            if row.prn and row.student_name
+        }
+        for team in teams:
+            project = db.query(Project).filter(Project.team_id == team.id).first()
+            members = db.query(TeamMember.roll_no).filter(TeamMember.team_id == team.id).order_by(TeamMember.id).all()
+            assigned = db.get(Mentor, project.assigned_mentor_id) if project and project.assigned_mentor_id else None
+            if not members:
+                continue
+            result.append({
+                "id": team.id,
+                "project_id": project.id if project else None,
+                "group_no": team.sheet_group_no or team.team_name or team.id,
+                "team": team.team_name,
+                "year": team.year or "3",
+                "department": team.department or "aiml",
+                "project_name": project.project_name if project else None,
+                "project_abstract": team.project_abstract or (project.project_abstract if project else None) or "",
+                "github_url": team.github_url,
+                "members": [f"{roster_names.get(row.roll_no.strip().casefold(), row.roll_no)} ({row.roll_no})"
+                            for row in members if row.roll_no],
+                "mentor_name": assigned.username if assigned else team.mentor_name,
+            })
+        return result
 
 
 @app.get("/api/projects/{project_id}")

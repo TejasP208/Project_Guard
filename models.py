@@ -27,6 +27,7 @@ class Student(Base):
     clerk_user_id: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     roll_no: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     year: Mapped[str | None] = mapped_column(String, nullable=True)
+    department: Mapped[str | None] = mapped_column(String, nullable=True, default="aiml")
 
 
 class EnrollmentCode(Base):
@@ -118,6 +119,8 @@ class Team(Base):
     # Team names are not unique in existing project data; team_code is the identifier.
     team_name: Mapped[str | None] = mapped_column(String, nullable=True)
     year: Mapped[str | None] = mapped_column(String, nullable=True)
+    department: Mapped[str | None] = mapped_column(String, nullable=True, default="aiml")
+    project_abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
     mentor_name: Mapped[str | None] = mapped_column(String, nullable=True)
     team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     sheet_group_no: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)

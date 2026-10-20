@@ -1522,11 +1522,18 @@ input[type="password"]:focus {
 }
 
 .axiom-project-modal {
-    max-width: 780px;
-    height: min(720px, 88vh);
+    width: 80vw;
+    max-width: none;
+    height: 80vh;
     display: flex;
     flex-direction: column;
 }
+
+.project-year-filters { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.project-year-filters button { padding: 0.45rem 0.8rem; border: 1px solid rgba(99,102,241,.3); border-radius: 8px; background: white; color: var(--text-main); cursor: pointer; font-weight: 700; }
+.project-year-filters button[aria-pressed="true"] { background: var(--primary); color: white; }
+.project-row-actions { white-space: nowrap; }
+.project-row-actions button + button { margin-left: 0.4rem; }
 
 .axiom-project-context {
     margin: 5px 0 0;

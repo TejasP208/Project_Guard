@@ -59,12 +59,24 @@ def _apply_migrations(connection):
         connection.exec_driver_sql(
             f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table_name}_clerk_user_id ON {table_name} (clerk_user_id)"
         )
+    if inspector.has_table("students"):
+        columns = {column["name"] for column in inspector.get_columns("students")}
+        if "department" not in columns:
+            connection.exec_driver_sql("ALTER TABLE students ADD COLUMN department VARCHAR")
+            connection.exec_driver_sql("UPDATE students SET year = '3'")
+        connection.exec_driver_sql("UPDATE students SET department = 'aiml' WHERE department IS NULL")
     if inspector.has_table("mentor_students"):
         roster_columns = {column["name"] for column in inspector.get_columns("mentor_students")}
         if "project_name" not in roster_columns:
             connection.exec_driver_sql("ALTER TABLE mentor_students ADD COLUMN project_name VARCHAR")
     if inspector.has_table("teams"):
         team_columns = {column["name"] for column in inspector.get_columns("teams")}
+        if "department" not in team_columns:
+            connection.exec_driver_sql("ALTER TABLE teams ADD COLUMN department VARCHAR")
+            connection.exec_driver_sql("UPDATE teams SET year = '3'")
+        if "project_abstract" not in team_columns:
+            connection.exec_driver_sql("ALTER TABLE teams ADD COLUMN project_abstract TEXT")
+        connection.exec_driver_sql("UPDATE teams SET department = 'aiml' WHERE department IS NULL")
         if "sheet_group_no" not in team_columns:
             connection.exec_driver_sql("ALTER TABLE teams ADD COLUMN sheet_group_no VARCHAR")
         if "github_url" not in team_columns:

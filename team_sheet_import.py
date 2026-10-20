@@ -137,6 +137,9 @@ def replace_team_sheet(db, groups: dict[str, list[dict]]) -> dict[str, int]:
             db.add(team)
             db.flush()
         team.team_name = f"Group {number}"
+        team.year = "3"
+        team.department = "aiml"
+        team.mentor_name = members[0]["mentor_name"] if members else None
         team.max_members = 4
         team.created_by_student_id = None
         project = projects.get(team.id)
