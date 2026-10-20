@@ -10,11 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css?v=project-rag-2">
+    <link rel="stylesheet" href="mentor_sytle.css?v=axiom-history-1">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="axiom_dashboard.css?v=2">
     <link rel="stylesheet" href="feedback.css">
     <script src="feedback.js?v=accessible-feedback-1" defer></script>
-    <script src="group_connect.js?v=project-visibility-1" defer></script>
+    <script src="group_connect.js?v=team-membership-1" defer></script>
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=portal-startup-3"></script>
     <script src="auth-retry.js?v=clock-retry-1"></script>
@@ -47,6 +48,10 @@
                 <a href="#" class="nav-item" id="nav-group-connect">
                     <i class="ph ph-chats-teardrop"></i>
                     <span>Group Connect</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-axiom">
+                    <i class="ph ph-sparkle"></i>
+                    <span>Axiom</span>
                 </a>
             </nav>
 
@@ -140,6 +145,18 @@
                     <div class="activity-list" id="dashboard-activity" aria-live="polite">
                         <div class="activity-item"><div class="activity-content"><span class="activity-time"><i class="ph ph-spinner-gap ph-spin"></i> Loading dashboard…</span></div></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- View: Axiom AI dashboard -->
+            <div id="view-axiom" class="content-view hidden" data-role="mentor">
+                <div class="axiom-dashboard glass-card">
+                    <div class="axiom-dashboard-heading">
+                        <div class="axiom-dashboard-brand"><span class="axiom-brand-icon" aria-hidden="true"><i class="ph-fill ph-sparkle"></i></span><div><span class="axiom-eyebrow">PROJECTGUARD ASSISTANT</span><h2>Axiom</h2><p>Review ideas, plan feedback, and prepare the next discussion.</p></div></div>
+                        <div class="axiom-dashboard-actions"><span class="axiom-availability"><span aria-hidden="true"></span> Ready to help</span><button type="button" class="axiom-dashboard-clear"><i class="ph ph-plus" aria-hidden="true"></i> New chat</button></div>
+                    </div>
+                    <div class="axiom-dashboard-messages" role="log" aria-label="Axiom conversation" aria-live="polite"></div>
+                    <div class="axiom-composer"><form class="axiom-dashboard-form"><label class="sr-only" for="mentor-axiom-input">Message Axiom</label><textarea id="mentor-axiom-input" maxlength="4000" rows="2" placeholder="Ask about a review, feedback, or project planning…" required></textarea><div class="axiom-composer-footer"><span>Enter to send · Shift+Enter for a new line</span><button type="submit"><span>Send message</span><i class="ph ph-arrow-up" aria-hidden="true"></i></button></div></form><p class="axiom-dashboard-error" role="alert"></p></div>
                 </div>
             </div>
 
@@ -442,7 +459,7 @@
                     <h2><i class="ph ph-sparkle"></i> Ask Axiom AI</h2>
                     <p id="axiom-project-context" class="axiom-project-context"></p>
                 </div>
-                <button class="modal-close-btn" id="axiom-modal-close" type="button" aria-label="Close Axiom AI"><i class="ph ph-x"></i></button>
+                <div class="axiom-modal-actions"><button class="btn-table-action" id="axiom-modal-new-chat" type="button">New chat</button><button class="modal-close-btn" id="axiom-modal-close" type="button" aria-label="Close Axiom AI"><i class="ph ph-x"></i></button></div>
             </div>
             <div class="axiom-chat-stream" id="axiom-chat-stream" aria-live="polite"></div>
             <form class="axiom-chat-form" id="axiom-chat-form">
@@ -636,6 +653,7 @@
                 'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Browse all team projects' },
                 'nav-student-list':  { view: 'view-student-list',  title: 'Student List',      subtitle: 'View all students under your mentorship' },
                 'nav-group-connect': { view: 'view-group-connect', title: 'Group Connect',     subtitle: 'Make groups to chat with the assigned student groups' },
+                'nav-axiom':         { view: 'view-axiom',         title: 'Axiom',             subtitle: 'Your academic project assistant' },
             };
 
             const mainTitle = document.getElementById('main-title');
@@ -919,8 +937,8 @@
             const axiomError = document.getElementById('axiom-chat-error');
             let selectedAxiomProject = null;
             let selectedAxiomTeam = null;
-            let axiomHistory = [];
             let axiomRequestController = null;
+            let axiomHistoryRequest = 0;
 
             function appendAxiomMessage(role, text = '') {
                 const message = document.createElement('div');
@@ -931,32 +949,53 @@
                 return message;
             }
 
+            async function restoreAxiomHistory(scope, id, welcome) {
+                const requestNumber = ++axiomHistoryRequest;
+                axiomStream.textContent = 'Loading conversation…';
+                axiomInput.disabled = true;
+                axiomSend.disabled = true;
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/axiom/history?scope=${scope}&scope_id=${encodeURIComponent(id)}`);
+                    const saved = await response.json().catch(() => []);
+                    if (!response.ok) throw new Error(saved.detail || 'Could not load the conversation.');
+                    if (requestNumber !== axiomHistoryRequest) return;
+                    axiomStream.replaceChildren();
+                    if (saved.length) saved.forEach(turn => appendAxiomMessage(turn.role, turn.content));
+                    else appendAxiomMessage('assistant', welcome);
+                } catch (error) {
+                    if (requestNumber !== axiomHistoryRequest) return;
+                    axiomStream.replaceChildren();
+                    axiomError.textContent = error.message || 'Could not load the conversation.';
+                } finally {
+                    if (requestNumber === axiomHistoryRequest) {
+                        axiomInput.disabled = false;
+                        axiomSend.disabled = false;
+                        if (axiomModal.classList.contains('active')) axiomInput.focus();
+                    }
+                }
+            }
+
             function openAxiomProject(project) {
                 selectedAxiomProject = project;
                 selectedAxiomTeam = null;
-                axiomHistory = [];
                 axiomError.textContent = '';
                 document.getElementById('axiom-project-context').textContent = `${project.project_name || 'Untitled'} · Group ${project.group_no || '—'}`;
-                axiomStream.innerHTML = '';
-                appendAxiomMessage('assistant', `I’m ready to help review “${project.project_name || 'this project'}”. Ask about originality, technical scope, risks, presentation, or improvements.`);
                 axiomModal.classList.add('active');
-                setTimeout(() => axiomInput.focus(), 100);
+                restoreAxiomHistory('project', project.id, `I’m ready to help review “${project.project_name || 'this project'}”. Ask about originality, technical scope, risks, presentation, or improvements.`);
             }
 
             function openTeamProjectChat(team) {
                 selectedAxiomProject = null;
                 selectedAxiomTeam = team;
-                axiomHistory = [];
                 document.getElementById('axiom-project-context').textContent = `${team.project_name || 'Not yet selected'} · Group ${team.group_no}`;
-                axiomStream.innerHTML = '';
-                appendAxiomMessage('assistant', 'Ask about this project. Answers use its title, abstract, and uploaded documents when available.');
                 document.getElementById('axiom-chat-form').classList.remove('hidden');
                 axiomError.textContent = '';
                 axiomModal.classList.add('active');
-                axiomInput.focus();
+                restoreAxiomHistory('team', team.id, 'Ask about this project. Answers use its title, abstract, and uploaded documents when available.');
             }
 
             function closeAxiomProject() {
+                axiomHistoryRequest++;
                 if (axiomRequestController) axiomRequestController.abort();
                 axiomRequestController = null;
                 axiomModal.classList.remove('active');
@@ -965,6 +1004,19 @@
 
             document.getElementById('axiom-modal-close').addEventListener('click', closeAxiomProject);
             axiomModal.addEventListener('click', event => { if (event.target === axiomModal) closeAxiomProject(); });
+            document.getElementById('axiom-modal-new-chat').addEventListener('click', async () => {
+                const scope = selectedAxiomTeam ? 'team' : 'project';
+                const id = selectedAxiomTeam?.id || selectedAxiomProject?.id;
+                if (!id) return;
+                if (axiomRequestController) axiomRequestController.abort();
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/axiom/history?scope=${scope}&scope_id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Could not clear the conversation.');
+                    axiomStream.replaceChildren();
+                    appendAxiomMessage('assistant', 'New conversation started. What would you like to ask?');
+                    axiomError.textContent = '';
+                } catch (error) { axiomError.textContent = error.message; }
+            });
 
             document.getElementById('axiom-chat-form').addEventListener('submit', async event => {
                 event.preventDefault();
@@ -997,7 +1049,7 @@
                         const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/project-chat`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             signal: axiomRequestController.signal,
-                            body: JSON.stringify({ team_id: selectedAxiomTeam.id, question, history: axiomHistory.slice(-8) })
+                            body: JSON.stringify({ team_id: selectedAxiomTeam.id, question })
                         });
                         const result = await response.json().catch(() => ({}));
                         if (!response.ok) throw new Error(result.detail || 'Project AI could not answer this question.');
@@ -1018,7 +1070,6 @@
                             reply.append(sources);
                         }
                         if (result.indexing_pending?.length) axiomError.textContent = 'Some uploaded files could not be indexed yet. This answer may be incomplete.';
-                        axiomHistory.push({ role: 'user', content: question }, { role: 'assistant', content: result.answer || '' });
                         axiomStream.scrollTop = axiomStream.scrollHeight;
                         return;
                     }
@@ -1028,8 +1079,7 @@
                         signal: axiomRequestController.signal,
                         body: JSON.stringify({
                             question,
-                            project_id: selectedAxiomProject.id,
-                            history: axiomHistory.slice(-8)
+                            project_id: selectedAxiomProject.id
                         })
                     });
                     if (!response.ok) {
@@ -1048,7 +1098,6 @@
                     pendingText += decoder.decode();
                     await revealWords(true);
                     if (!reply.textContent.trim()) throw new Error('Axiom AI returned an empty response.');
-                    axiomHistory.push({ role: 'user', content: question }, { role: 'assistant', content: reply.textContent });
                 } catch (error) {
                     if (error.name !== 'AbortError') {
                         reply.remove();
@@ -1061,7 +1110,7 @@
                     axiomRequestController = null;
                     axiomSend.disabled = false;
                     axiomInput.disabled = false;
-                    axiomInput.focus();
+                    if (axiomModal.classList.contains('active')) axiomInput.focus();
                 }
             });
             axiomStream.addEventListener('click', async event => {
@@ -1718,5 +1767,6 @@
         })();
     </script>
     <script src="account-actions.js?v=account-actions-2"></script>
+    <script src="axiom_dashboard.js?v=3"></script>
 </body>
 </html>

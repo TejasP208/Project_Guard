@@ -80,6 +80,24 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual([(row["group_no"], row["project_name"], row["year"]) for row in response.json()],
                          [("11", "Study planner", "3"), ("12", "Campus map", "4")])
 
+    def test_project_directory_uses_roster_title_without_confusing_it_with_group(self):
+        with self.sessions() as db:
+            db.add(Team(id=21, team_name="Solar tracker", sheet_group_no="21", year="3"))
+            db.add(TeamMember(team_id=21, roll_no="S021"))
+            db.add(Team(id=22, team_name="Wildlife monitor", sheet_group_no="22", year="3"))
+            db.add(TeamMember(team_id=22, roll_no="S022"))
+            db.add(MentorStudent(mentor_name="Dr Rao", mentor_key="rao",
+                                 student_name="Asha", prn="S021", group_name="21", project_name="Solar tracker"))
+            db.commit()
+        response = self.call("GET", "/mentor/team-projects")
+        self.assertEqual(response.status_code, 200)
+        row = next(item for item in response.json() if item["id"] == 21)
+        self.assertEqual((row["group_no"], row["team"], row["project_name"]),
+                         ("21", "Group 21", "Solar tracker"))
+        legacy = next(item for item in response.json() if item["id"] == 22)
+        self.assertEqual((legacy["group_no"], legacy["team"], legacy["project_name"]),
+                         ("22", "Group 22", "Wildlife monitor"))
+
     def test_import_filters_by_mentor_and_preserves_student_names(self):
         rows = [["Student Name", "PRN", "Mentor Name", "Group"],
                 ["Asha", "S001", "Dr Rao", "A"], ["Vivek", "S002", "Dr Shah", "B"]]
@@ -134,17 +152,42 @@ class MentorRosterTests(unittest.TestCase):
     def test_full_team_sheet_rejects_unmapped_student_project_team(self):
         with self.sessions() as db:
             db.add_all([Team(id=9, team_name="Student team"), TeamMember(team_id=9, roll_no="S00001"),
+                        TeamMember(team_id=9, roll_no="S00002"),
                         Project(team_id=9, project_name="Student submission")])
             db.commit()
         sheet = workbook_bytes([
             ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],
             [1, "S00001", "One", "Sheet idea", "Dr Rao"],
+            [2, "S00002", "Two", "Other idea", "Dr Rao"],
         ])
         response = self.call("POST", "/mentor/teams/import", files={"file": ("groups.xlsx", sheet)})
         self.assertEqual(response.status_code, 409)
         with self.sessions() as db:
-            self.assertEqual(db.query(TeamMember).one().team_id, 9)
+            self.assertEqual(db.query(TeamMember).count(), 2)
             self.assertEqual(db.query(Project).one().team_id, 9)
+
+    def test_full_team_sheet_maps_split_team_to_its_project_submitter(self):
+        with self.sessions() as db:
+            db.add(Student(id=5, roll_no="S00009"))
+            db.add(Team(id=19, team_name="Alpha"))
+            db.add_all([TeamMember(team_id=19, roll_no="S00009"),
+                        TeamMember(team_id=19, roll_no="S00004")])
+            db.add(Project(team_id=19, project_name="Student submission",
+                           submitted_by_student_id=5, submission_status="rejected"))
+            db.commit()
+        sheet = workbook_bytes([
+            ["Group no", "Rollno", "Name of the Student", "Finalized idea", "Guide"],
+            [4, "S00004", "Four", "Other project", "Dr Rao"],
+            [9, "S00009", "Nine", "", "Dr Rao"],
+        ])
+        response = self.call("POST", "/mentor/teams/import", files={"file": ("groups.xlsx", sheet)})
+        self.assertEqual(response.status_code, 200)
+        with self.sessions() as db:
+            team = db.get(Team, 19)
+            self.assertEqual(team.sheet_group_no, "9")
+            self.assertEqual(team.team_name, "Group 9")
+            self.assertEqual([row.roll_no for row in db.query(TeamMember).filter(TeamMember.team_id == 19)], ["S00009"])
+            self.assertEqual(db.query(Project).one().team_id, 19)
 
     def test_full_team_sheet_archives_chat_and_reviews_when_group_members_change(self):
         old_room = room_id("rao", "1")
@@ -221,11 +264,12 @@ class MentorRosterTests(unittest.TestCase):
             prompts.append(prompt)
             yield "Analysis ready"
         with patch.object(main, "Chatbot_stream", chatbot):
-            response = self.call("POST", "/mentor/axiom-stream", json={"project_id": 1, "question": "Improve?",
-                                  "history": [{"role": "user", "content": "Scope?"}]})
+            first = self.call("POST", "/mentor/axiom-stream", json={"project_id": 1, "question": "Scope?"})
+            response = self.call("POST", "/mentor/axiom-stream", json={"project_id": 1, "question": "Improve?"})
+        self.assertEqual(first.text, "Analysis ready")
         self.assertEqual(response.text, "Analysis ready")
-        self.assertIn("Face recognition", prompts[0])
-        self.assertIn("Scope?", prompts[0])
+        self.assertIn("Face recognition", prompts[1])
+        self.assertIn("Scope?", prompts[1])
 
     def test_invitation_accept_is_scoped_to_verified_invitee(self):
         with self.sessions() as db:

@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, text
 
 from mentor_roster import mentor_key
-from models import GroupMessage, Mentor, MentorReview, MentorStudent, Student
+from models import GroupMessage, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamMember
 from project_access import roster_for_project_owners
 
 
@@ -54,6 +55,12 @@ def assigned_rooms(db, role, user):
         roster = roster_for_project_owners(db, roster)
         roster = [row for row in roster if row.group_name and room_id(row.mentor_key, row.group_name) in allowed]
         name = assignments[0].student_name if assignments else account.roll_no
+    members_by_team = defaultdict(list)
+    for member in db.query(TeamMember).all():
+        if member.team_id and member.roll_no:
+            members_by_team[member.team_id].append(member.roll_no)
+    linked_rolls = {roll.strip().casefold() for rolls in members_by_team.values() for roll in rolls}
+    roster = [row for row in roster if not row.prn or row.prn.strip().casefold() not in linked_rolls]
     groups = {}
     for row in roster:
         if not row.group_name or not row.group_name.strip():
@@ -69,6 +76,37 @@ def assigned_rooms(db, role, user):
         group["members"].append(row.student_name)
         if row.project_name and row.project_name.strip().lower() != "no project":
             group["project"] = row.project_name
+    # Team membership is authoritative. Roster rows are retained only for
+    # students who have not yet been linked to a Team in the database.
+    roster_names = {row.prn.strip().casefold(): row.student_name
+                    for row in db.query(MentorStudent).all() if row.prn and row.student_name}
+    roster_titles = {row.prn.strip().casefold(): row.project_name
+                     for row in db.query(MentorStudent).all() if row.prn and row.project_name}
+    for team in db.query(Team).all():
+        rolls = members_by_team.get(team.id, [])
+        if not rolls or (role == "student" and user.casefold() not in {roll.strip().casefold() for roll in rolls}):
+            continue
+        project = db.query(Project).filter(Project.team_id == team.id).first()
+        owner = db.get(Mentor, project.assigned_mentor_id) if project and project.assigned_mentor_id else None
+        mentor_name = owner.username if owner else team.mentor_name
+        if role == "mentor" and (not mentor_name or mentor_key(mentor_name) != mentor_key(name)):
+            continue
+        number = str(team.sheet_group_no or (project.group_no if project else None) or team.id)
+        key = mentor_key(mentor_name) if mentor_name else "unassigned"
+        identity = room_id(key, number)
+        title = (project.project_name if project else None) or next(
+            (roster_titles.get(roll.strip().casefold()) for roll in rolls
+             if roster_titles.get(roll.strip().casefold())), None) or (
+            team.team_name if team.created_by_student_id is None and team.team_name
+            and team.team_name.strip().casefold() not in {number.casefold(), f"group {number}".casefold()}
+            else None) or "No Project"
+        groups[identity] = {
+            "id": identity, "number": number, "name": f"Group {number}",
+            "mentor": mentor_name or "Not assigned", "mentor_key": key,
+            "project": title,
+            "members": [roster_names.get(roll.strip().casefold(), roll) for roll in rolls],
+            "reviews": [],
+        }
     if groups:
         keys = {group["mentor_key"] for group in groups.values()}
         reviews = db.query(MentorReview).filter(

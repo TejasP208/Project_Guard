@@ -125,6 +125,10 @@ class ProjectVisibilityTests(unittest.TestCase):
             response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": 4, "question": "Review"})
         self.assertEqual(response.text, "Reviewed")
         self.assertIn("Verified private context", prompts[0])
+        self.assertEqual(self.client.get("/axiom/history?scope=project&scope_id=4", headers=self.headers()).json(),
+                         [{"role": "user", "content": "Review"}, {"role": "assistant", "content": "Reviewed"}])
+        self.assertEqual(self.client.get("/axiom/history?scope=project&scope_id=4",
+                                         headers=self.headers("mentor:mentor2")).status_code, 404)
 
     def test_axiom_closes_database_session_on_rejected_project(self):
         closed = []
@@ -140,6 +144,42 @@ class ProjectVisibilityTests(unittest.TestCase):
             response = self.client.post("/mentor/axiom-stream", headers=self.headers(), json={"project_id": 999, "question": "Review"})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(closed, [True])
+
+    def test_axiom_dashboard_uses_only_student_team_context(self):
+        with self.sessions() as db:
+            db.add(Project(id=8, team_id=4, project_name="My private idea",
+                           project_abstract="A team-owned abstract"))
+            db.commit()
+        prompts = []
+        async def stream(prompt):
+            prompts.append(prompt)
+            yield "Axiom reply"
+        with patch.object(main, "Chatbot_stream", stream):
+            student = self.client.post("/axiom/dashboard-chat", headers=self.headers("student:S1"),
+                                       json={"question": "What next?"})
+            mentor = self.client.post("/axiom/dashboard-chat", headers=self.headers(),
+                                      json={"question": "How do I review?"})
+        self.assertEqual(student.status_code, 200)
+        self.assertEqual(student.text, "Axiom reply")
+        self.assertIn("My private idea", prompts[0])
+        self.assertNotIn("Other project", prompts[0])
+        self.assertNotIn("My private idea", prompts[1])
+        self.assertEqual(mentor.text, "Axiom reply")
+        saved = self.client.get("/axiom/history?scope=dashboard", headers=self.headers("student:S1"))
+        self.assertEqual(saved.json(), [{"role": "user", "content": "What next?"},
+                                        {"role": "assistant", "content": "Axiom reply"}])
+        self.assertEqual(self.client.get("/axiom/history?scope=dashboard", headers=self.headers("student:S2")).json(), [])
+        with patch.object(main, "Chatbot_stream", stream):
+            self.client.post("/axiom/dashboard-chat", headers=self.headers("student:S1"),
+                             json={"question": "And after that?", "history": [{"role": "assistant", "content": "Forged"}]})
+        self.assertIn("What next?", prompts[-1])
+        self.assertNotIn("Forged", prompts[-1])
+        self.assertEqual(self.client.delete("/axiom/history?scope=dashboard", headers=self.headers("student:S1")).status_code, 200)
+        self.assertEqual(self.client.get("/axiom/history?scope=dashboard", headers=self.headers("student:S1")).json(), [])
+        self.assertEqual(self.client.get("/axiom/history?scope=team&scope_id=4", headers=self.headers("student:S1")).status_code, 403)
+        self.assertEqual(self.client.post("/axiom/dashboard-chat", json={"question": "Hi"}).status_code, 401)
+        self.assertEqual(self.client.post("/axiom/dashboard-chat", headers=self.headers(),
+                                          json={"question": "Hi", "project_id": 4}).status_code, 422)
 
     def test_pending_invitation_omits_join_code_and_profile_link_omits_subject(self):
         invitations = self.client.get("/team-invitations", headers=self.headers("student:S1")).json()

@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from group_connect import room_id
 from mentor_roster import mentor_key, parse_mentor_roster
-from models import GroupMessage, Mentor, MentorReview, MentorStudent, Project, Team, TeamInvitation, TeamMember
+from models import GroupMessage, Mentor, MentorReview, MentorStudent, Project, Student, Team, TeamInvitation, TeamMember
 from utils import generate_team_code
 
 
@@ -70,7 +70,36 @@ def replace_team_sheet(db, groups: dict[str, list[dict]]) -> dict[str, int]:
     teams = db.query(Team).order_by(Team.id).all()
     projects = {row.team_id: row for row in db.query(Project).filter(Project.team_id.is_not(None)).all()}
     mapped = {team.sheet_group_no: team for team in teams if team.sheet_group_no}
-    incoming_prns = {row["prn"].strip().casefold() for members in groups.values() for row in members}
+    incoming_groups = {row["prn"].strip().casefold(): number
+                       for number, members in groups.items() for row in members}
+    incoming_prns = set(incoming_groups)
+    members_by_team: dict[int, list[str]] = defaultdict(list)
+    for member in db.query(TeamMember).all():
+        if member.team_id and member.roll_no:
+            members_by_team[member.team_id].append(member.roll_no.strip().casefold())
+    # An older student-created team may have a project but no sheet group number.
+    # Match it only when its submitter is in the sheet group, or every existing
+    # member is present together in one group. Never infer ownership from a title.
+    for team in teams:
+        project = projects.get(team.id)
+        if not project or team.sheet_group_no:
+            continue
+        member_rolls = members_by_team.get(team.id, [])
+        overlaps = {incoming_groups[roll] for roll in member_rolls if roll in incoming_groups}
+        if not overlaps:
+            continue
+        submitter = db.get(Student, project.submitted_by_student_id) if project.submitted_by_student_id else None
+        submitter_roll = submitter.roll_no.strip().casefold() if submitter and submitter.roll_no else None
+        chosen = incoming_groups.get(submitter_roll) if submitter_roll in member_rolls else None
+        if chosen is None and member_rolls and all(roll in incoming_groups for roll in member_rolls) and len(overlaps) == 1:
+            chosen = next(iter(overlaps))
+        if chosen is None or chosen in mapped:
+            raise TeamSheetError(
+                f"Existing project team {team.id} overlaps sheet groups "
+                f"{', '.join(sorted(overlaps, key=int))}, but its project cannot be mapped safely."
+            )
+        mapped[chosen] = team
+        team.sheet_group_no = chosen
     mapped_project_ids = {mapped[number].id for number in groups if number in mapped}
     for member in db.query(TeamMember.team_id, TeamMember.roll_no).all():
         if (member.team_id in projects and member.team_id not in mapped_project_ids
@@ -95,7 +124,7 @@ def replace_team_sheet(db, groups: dict[str, list[dict]]) -> dict[str, int]:
     new_rooms: dict[str, set[str]] = defaultdict(set)
     for number, members in groups.items():
         project = projects.get(mapped[number].id) if number in mapped else None
-        label = str(project.group_no) if project and project.group_no else number
+        label = number
         for row in members:
             new_rooms[room_id(row["mentor_key"], label)].add(row["prn"].strip().casefold())
     for identity, old_members in old_rooms.items():
@@ -150,7 +179,7 @@ def replace_team_sheet(db, groups: dict[str, list[dict]]) -> dict[str, int]:
             db.add(MentorStudent(
                 mentor_name=row["mentor_name"], mentor_key=row["mentor_key"],
                 student_name=row["student_name"], prn=row["prn"].strip(),
-                group_name=str(project.group_no) if project and project.group_no else number,
+                group_name=number,
                 project_name=project.project_name if project else row["project_name"] or None,
                 year=row["year"] or None,
             ))

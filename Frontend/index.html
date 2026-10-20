@@ -13,6 +13,7 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="style.css?v=github-card-ui-1">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="axiom_dashboard.css?v=2">
     <link rel="stylesheet" href="feedback.css">
     <script src="feedback.js?v=accessible-feedback-1" defer></script>
     <script src="deployment-config.js"></script>
@@ -52,6 +53,10 @@
                 <a href="#" class="nav-item" id="nav-group-connect">
                     <i class="ph ph-chats-teardrop"></i>
                     <span>Group Connect</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-axiom">
+                    <i class="ph ph-sparkle"></i>
+                    <span>Axiom</span>
                 </a>
             </nav>
 
@@ -177,6 +182,22 @@
                         </form>
                     </details>
                     <p id="student-topic-change-status" role="status"></p>
+                </div>
+            </div>
+
+            <!-- Axiom AI dashboard -->
+            <div id="view-axiom" class="content-view hidden" data-role="student">
+                <header class="top-header"><div>
+                    <h1 class="page-title">Axiom</h1>
+                    <p class="page-subtitle">Ask about your project, originality, planning, and next steps.</p>
+                </div></header>
+                <div class="axiom-dashboard glass-card">
+                    <div class="axiom-dashboard-heading">
+                        <div class="axiom-dashboard-brand"><span class="axiom-brand-icon" aria-hidden="true"><i class="ph-fill ph-sparkle"></i></span><div><span class="axiom-eyebrow">PROJECTGUARD ASSISTANT</span><h2>Axiom</h2><p>Your team project is included when available.</p></div></div>
+                        <div class="axiom-dashboard-actions"><span class="axiom-availability"><span aria-hidden="true"></span> Ready to help</span><button type="button" class="axiom-dashboard-clear"><i class="ph ph-plus" aria-hidden="true"></i> New chat</button></div>
+                    </div>
+                    <div class="axiom-dashboard-messages" role="log" aria-label="Axiom conversation" aria-live="polite"></div>
+                    <div class="axiom-composer"><form class="axiom-dashboard-form"><label class="sr-only" for="student-axiom-input">Message Axiom</label><textarea id="student-axiom-input" maxlength="4000" rows="2" placeholder="Ask about your project, ideas, or next steps…" required></textarea><div class="axiom-composer-footer"><span>Enter to send · Shift+Enter for a new line</span><button type="submit"><span>Send message</span><i class="ph ph-arrow-up" aria-hidden="true"></i></button></div></form><p class="axiom-dashboard-error" role="alert"></p></div>
                 </div>
             </div>
 
@@ -621,9 +642,10 @@
         </div>
     </div>
 
-    <script src="script.js?v=github-card-ui-1"></script>
+    <script src="script.js?v=axiom-history-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
-    <script src="group_connect.js?v=project-visibility-1"></script>
+    <script src="group_connect.js?v=team-membership-1"></script>
+    <script src="axiom_dashboard.js?v=3"></script>
 </body>
 
 </html>

@@ -122,6 +122,11 @@ class ProjectProgressTests(unittest.TestCase):
         self.assertEqual(response.json()["sources"][0]["filename"], "idea.txt")
         self.assertNotIn("text", response.json()["sources"][0])
         self.assertEqual(retrieve.call_args.args[:2], (1, "What does it do?"))
+        history = self.call("GET", "/axiom/history?scope=team&scope_id=1", identity="mentor:Rao")
+        self.assertEqual(history.json(), [{"role": "user", "content": "What does it do?"},
+                                          {"role": "assistant", "content": "It recognizes plants from photos [1]."}])
+        self.assertEqual(self.call("GET", "/axiom/history?scope=team&scope_id=1", identity="mentor:Other").json(), [])
+        self.assertEqual(self.call("GET", "/axiom/history?scope=team&scope_id=1", identity="student:S1").status_code, 403)
         self.assertEqual(self.call("POST", "/mentor/project-chat", identity="student:S1",
                                    json={"team_id": 1, "question": "What does it do?"}).status_code, 403)
 

@@ -1554,6 +1554,8 @@ input[type="password"]:focus {
     font-size: 0.84rem;
 }
 
+.axiom-modal-actions { display: flex; align-items: center; gap: .65rem; }
+
 .axiom-chat-stream {
     flex: 1;
     overflow-y: auto;

@@ -20,6 +20,18 @@ class GroupMessage(Base):
     meet_link: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
 
+
+class AxiomMessage(Base):
+    __tablename__ = "axiom_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_clerk_user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    scope_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
 class Student(Base):
     __tablename__ = "students"
 

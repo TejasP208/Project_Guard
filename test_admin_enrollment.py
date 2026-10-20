@@ -11,7 +11,7 @@ from starlette.requests import Request
 
 import main
 from enrollment import code_hash, redeem_mentor, redeem_student
-from models import Base, EnrollmentCode, Mentor, Student
+from models import AxiomMessage, Base, EnrollmentCode, Mentor, Student
 
 
 class AdminEnrollmentTests(unittest.TestCase):
@@ -78,6 +78,8 @@ class AdminEnrollmentTests(unittest.TestCase):
     def test_admin_deletes_both_roles_and_preserves_profile_on_clerk_failure(self):
         with self.sessions() as db:
             db.add_all([Student(id=1, roll_no='S1', clerk_user_id='student1'), Mentor(id=1, username='M1', clerk_user_id='mentor1')])
+            db.add(AxiomMessage(owner_clerk_user_id='mentor1', scope='dashboard', role='user',
+                                content='Private question', created_at='2026-10-21'))
             db.commit()
         with patch.object(main, 'Clerk') as clerk:
             clerk.return_value.users.delete.side_effect = RuntimeError('unavailable')
@@ -90,6 +92,7 @@ class AdminEnrollmentTests(unittest.TestCase):
         with self.sessions() as db:
             self.assertIsNone(db.get(Student, 1))
             self.assertIsNone(db.get(Mentor, 1))
+            self.assertEqual(db.query(AxiomMessage).count(), 0)
 
     def test_unlinked_legacy_profile_can_be_deleted_without_clerk_configuration(self):
         with self.sessions() as db:

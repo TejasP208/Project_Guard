@@ -600,6 +600,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'nav-submit': 'view-submit',
         'nav-team': 'view-team',
         'nav-group-connect': 'view-group-connect',
+        'nav-axiom': 'view-axiom',
         'nav-plagiarism': 'view-plagiarism',
         'nav-settings': 'view-settings'
     };
