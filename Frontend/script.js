@@ -218,7 +218,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not respond to invitation.');
             if (result.status === 'accepted') {
-                renderTeamUI(result.team_name, result.team_code, result.members, activeUser, result.github_url);
+                await fetchStudentTeam(activeUser);
+                if (window.loadStudentProgress) await window.loadStudentProgress();
                 notificationsModal.classList.remove('active');
             }
             await loadTeamInvitations();
@@ -233,24 +234,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/get-student-team`);
             const data = await response.json();
             if (response.ok && data.has_team) {
-                renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url, data.submission_status);
+                renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.submission_status, data);
             }
         } catch (error) {
             console.error('Error fetching student team details:', error);
         }
     }
 
-    function renderTeamUI(teamName, teamCode, members, rollNo, githubUrl = '', submissionStatus = null) {
+    function renderTeamUI(teamName, teamCode, members, rollNo, submissionStatus = null, details = {}) {
         // Show roster card with team name
         const rosterCard = document.getElementById('team-roster-card');
         const rosterName = document.getElementById('roster-team-name');
         const rosterMembers = document.getElementById('roster-members');
         const rosterCode = document.getElementById('roster-team-code');
         
-        if (rosterName && teamName) rosterName.textContent = 'TEAM: ' + teamName.toUpperCase();
-        if (rosterCode && teamCode) rosterCode.textContent = teamCode;
-        const githubInput = document.getElementById('roster-github-url');
-        if (githubInput) githubInput.value = githubUrl || '';
+        if (rosterName) rosterName.textContent = `TEAM: ${(teamName || 'Unnamed team').toUpperCase()}`;
+        if (rosterCode) rosterCode.textContent = teamCode || 'Not available';
+        const copyRosterCode = document.getElementById('btn-copy-roster-code');
+        if (copyRosterCode) copyRosterCode.hidden = !teamCode;
+        document.getElementById('roster-group-number').textContent = details.group_no ? `Group ${details.group_no}` : '—';
+        document.getElementById('roster-year-department').textContent = `${details.year || '—'} · ${(details.department || 'aiml').toUpperCase()}`;
+        document.getElementById('roster-mentor-name').textContent = details.mentor_name || 'Not assigned';
+        document.getElementById('roster-project-name').textContent = details.project_name || 'Not yet selected';
+        document.getElementById('roster-project-abstract').textContent = details.project_abstract || 'No project abstract submitted yet.';
 
         // Render all current members dynamically
         if (rosterMembers && members) {
@@ -260,7 +266,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             rosterMembers.innerHTML = ''; 
             members.forEach((member, index) => {
                 const isLeader = (index === 0) ? '<span class="leader-badge"><i class="ph-fill ph-crown"></i></span>' : '';
-                const labelText = (member === rollNo) ? `You (${escapeTeamHtml(member)})` : escapeTeamHtml(member);
+                const detail = details.member_details?.find(item => item.roll_no?.toLowerCase() === member?.toLowerCase());
+                const name = detail?.name && detail.name !== member ? `${detail.name} (${member})` : member;
+                const labelText = (member === rollNo) ? `You · ${escapeTeamHtml(name)}` : escapeTeamHtml(name);
                 const leaderClass = (index === 0) ? 'leader' : '';
                 
                 rosterMembers.innerHTML += `
@@ -304,32 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (createCard) createCard.style.display = 'none';
     }
 
-    const teamGithubForm = document.getElementById('team-github-form');
-    if (teamGithubForm) {
-        teamGithubForm.addEventListener('submit', async event => {
-            event.preventDefault();
-            const input = document.getElementById('roster-github-url');
-            const status = document.getElementById('team-github-status');
-            const button = teamGithubForm.querySelector('button[type="submit"]');
-            button.disabled = true;
-            status.textContent = 'Saving…';
-            try {
-                const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/my-team/github`, {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ github_url: input.value })
-                });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.detail || 'Could not save the link.');
-                input.value = result.github_url || '';
-                status.textContent = result.github_url ? 'GitHub link saved.' : 'GitHub link removed.';
-            } catch (error) {
-                status.textContent = error.message || 'Could not save the link.';
-            } finally {
-                button.disabled = false;
-            }
-        });
-    }
-
     // Elements
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -359,6 +341,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // File state
     let currentFile = null;
+    const submissionForm = document.getElementById('submission-form');
+    function invalidateSimilarityCheck() {
+        delete submissionForm.dataset.checkToken;
+        btnSubmit.disabled = true;
+        if (evalPanel.style.display !== 'none') resetEvalState();
+    }
+    document.getElementById('project-title').addEventListener('input', invalidateSimilarityCheck);
+    document.getElementById('project-desc').addEventListener('input', invalidateSimilarityCheck);
     const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
     const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'txt']);
 
@@ -403,8 +393,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function handleFiles(files) {
         if (files.length > 0) {
+            invalidateSimilarityCheck();
             const file = files[0];
             currentFile = null;
+            submissionForm._selectedFile = null;
             const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
             if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
                 showUploadError('Unsupported file type. Choose a PDF, DOCX, or TXT file.');
@@ -418,6 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             uploadStatusText.style.color = 'var(--text-muted)';
             currentFile = file;
+            submissionForm._selectedFile = file;
             startUploadSimulation(currentFile.name);
         }
     }
@@ -461,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         progressBar.style.background = 'var(--status-verified)';
 
         // Enable buttons
-        btnSubmit.disabled = false;
+        btnSubmit.disabled = true;
         btnCheck.disabled = false;
     }
 
@@ -483,22 +476,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Remove File Logic --- //
     removeFileBtn.addEventListener('click', () => {
+        invalidateSimilarityCheck();
         currentFile = null;
+        submissionForm._selectedFile = null;
         fileInput.value = '';
         clearUploadError();
         dropZone.style.display = 'block';
         uploadProgressArea.style.display = 'none';
         evalPanel.style.display = 'none';
 
-        btnSubmit.disabled = false;
+        btnSubmit.disabled = true;
         btnCheck.disabled = false;
         progressBar.style.background = 'linear-gradient(90deg, var(--primary), var(--secondary))';
         uploadStatusText.style.color = 'var(--text-muted)';
     });
 
 
-    // --- Anti-Gravity Checking Simulation --- //
+    // --- Similarity checking --- //
     btnCheck.addEventListener('click', async () => {
+        const title = document.getElementById('project-title').value.trim();
+        const desc = document.getElementById('project-desc').value.trim();
+        if (!title || !desc || !currentFile) {
+            showUploadError('Enter a project title and abstract, then attach a document before checking similarity.');
+            return;
+        }
+        const checkedFile = currentFile;
+        invalidateSimilarityCheck();
         // Ui State Updates
         btnCheck.disabled = true;
         btnCheck.innerHTML = '<i class="ph-fill ph-spinner-gap ph-spin"></i> Checking...';
@@ -509,13 +512,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         evalPanel.style.display = 'block';
         clearUploadError();
 
-        const title = document.getElementById("project-title").value.trim();
-        const desc = document.getElementById("project-desc") ? document.getElementById("project-desc").value.trim() : "";
-
         const formData = new FormData();
         formData.append("title", title);
         formData.append("description", desc);
-        if (currentFile) formData.append("file", currentFile);
+        formData.append("file", checkedFile);
 
         try {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/check-plagiarism`, {
@@ -525,9 +525,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             
             if (response.ok) {
+                if (currentFile !== checkedFile || document.getElementById('project-title').value.trim() !== title || document.getElementById('project-desc').value.trim() !== desc) {
+                    resetEvalState();
+                    showUploadError('Project details changed during the check. Check similarity again.');
+                    return;
+                }
                 finishChecking(data);
                 if (data.document_text_truncated) {
-                    showUploadError('The document is within the upload limits, but only its first 500 extracted characters were checked.');
+                    showUploadError('The document was shortened for scoring. Review it and check again.');
                 }
             } else {
                 showUploadError(data.detail || "The document could not be checked. Review the file and try again.");
@@ -549,6 +554,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function finishChecking(data) {
+        btnCheck.disabled = false;
         btnCheck.innerHTML = '<i class="ph-fill ph-check-circle"></i> Checked';
 
         chipChecking.style.display = 'none';
@@ -583,15 +589,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         scoreContainer.style.animation = 'fadeIn 0.5s ease forwards';
 
         const threshold = data.submission_block_threshold;
-        if (typeof threshold === 'number' && data.plagiarism_percent > threshold) {
+        if (!data.can_submit || !data.check_token) {
             btnSubmit.disabled = true;
-            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the configured ${threshold}% submission limit. Revise the project before submitting.`);
+            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the ${threshold}% submission limit. Revise the project and check again.`);
         } else {
+            submissionForm.dataset.checkToken = data.check_token;
             btnSubmit.disabled = false;
-            if (typeof threshold !== 'number') {
-                uploadError?.classList.add('advisory');
-                showUploadError('This similarity score is advisory. No calibrated submission-block threshold is configured yet.');
-            }
         }
     }
 
@@ -600,6 +603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chipChecking.style.display = 'none';
         chipVerified.style.display = 'none';
         scoreContainer.style.display = 'none';
+        btnCheck.disabled = false;
 
         btnCheck.innerHTML = '<i class="ph-fill ph-shield-check"></i> Check  Plagiarism';
     }
@@ -618,6 +622,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'nav-submit': 'view-submit',
         'nav-team': 'view-team',
         'nav-group-connect': 'view-group-connect',
+        'nav-axiom': 'view-axiom',
         'nav-plagiarism': 'view-plagiarism',
         'nav-settings': 'view-settings'
     };
@@ -634,6 +639,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             view.classList.add('hidden');
         });
         document.getElementById(navItems[targetNavId]).classList.remove('hidden');
+        if (targetNavId === 'nav-find' || targetNavId === 'nav-dashboard') loadStudentProgress();
+        if (targetNavId === 'nav-team') fetchStudentTeam(activeUser);
     }
 
     // Attach click listeners to nav items
@@ -707,7 +714,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         team_name: teamName,
                         description: description,
                         max_members: parseInt(maxMembers),
-                        github_url: document.getElementById('team-github')?.value || ''
+                        github_url: ''
                     })
                 });
 
@@ -721,7 +728,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     createTeamFormEl.reset();
 
                     // Render Team UI using helper
-                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
+                    await fetchStudentTeam(rollNo);
+                    if (window.loadStudentProgress) await window.loadStudentProgress();
                 } else {
                     window.projectGuardFeedback.notify(data.detail || 'Failed to create team', 'error');
                 }
@@ -759,7 +767,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     joinTeamFormEl.reset();
 
                     // Render Team UI using helper
-                    renderTeamUI(data.team_name, data.team_code, data.members, rollNo, data.github_url);
+                    await fetchStudentTeam(rollNo);
+                    if (window.loadStudentProgress) await window.loadStudentProgress();
                 } else {
                     window.projectGuardFeedback.notify(data.detail || data.error || 'Failed to join team', 'error');
                 }
@@ -859,106 +868,138 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-});
-const input = document.getElementById("find-chat-input");
-const sendBtn = document.getElementById("find-send-btn");
-const chatBox = document.getElementById("find-chat-box");
 
-sendBtn.addEventListener("click", sendMessage);
-input.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") sendMessage();
-});
-
-async function sendMessage() {
-    const message = input.value.trim();
-    if (!message) return;
-
-    // Disable Send Button
-    const originalBtnHtml = sendBtn.innerHTML;
-    sendBtn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i>';
-    sendBtn.disabled = true;
-
-    // 🧑 User message
-    const userWrapper = document.createElement('div');
-    userWrapper.className = 'message-wrapper user-wrapper';
-    userWrapper.innerHTML = '<div class="message-avatar"><i class="ph-fill ph-user"></i></div>';
-    const userMessage = document.createElement('div');
-    userMessage.className = 'premium-glass-bubble';
-    userMessage.textContent = message;
-    userWrapper.appendChild(userMessage);
-    chatBox.appendChild(userWrapper);
-    input.value = "";
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    // 🤖 Create empty AI message container
-    const aiWrapper = document.createElement("div");
-    aiWrapper.className = "message-wrapper ai-wrapper";
-    
-    // Add avatar and glass bubble
-    aiWrapper.innerHTML = `
-        <div class="message-avatar"><i class="ph-fill ph-terminal-window"></i></div>
-    `;
-    
-    const aiMessage = document.createElement("div");
-    aiMessage.className = "ai-message premium-glass-bubble streaming-cursor";
-    aiWrapper.appendChild(aiMessage);
-    chatBox.appendChild(aiWrapper);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    let pendingText = "";
-    const wordDelayMs = 65;
-
-    async function revealCompleteWords() {
-        let match;
-        while ((match = pendingText.match(/^\s*\S+\s+/))) {
-            aiMessage.textContent += match[0];
-            pendingText = pendingText.slice(match[0].length);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            await new Promise(resolve => setTimeout(resolve, wordDelayMs));
+    function renderRepository(url) {
+        const link = document.getElementById('student-project-github');
+        const empty = document.getElementById('student-repository-empty');
+        if (url) {
+            link.href = url;
+            link.textContent = url.replace(/^https:\/\/github\.com\//i, '');
+            link.hidden = false;
+            empty.hidden = true;
+        } else {
+            link.removeAttribute('href');
+            link.textContent = '';
+            link.hidden = true;
+            empty.hidden = false;
         }
+        document.getElementById('student-dashboard-github').value = url || '';
     }
 
-    try {
-        const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/chat-stream?prompt=${encodeURIComponent(message)}`);
-
-        // If backend fails
-        if (!res.ok) {
-            const errText = await res.text().catch(() => "");
-            throw new Error(errText || "Server error");
-        }
-
-        if (!res.body) throw new Error("Streaming is unavailable in this browser");
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            pendingText += decoder.decode(value, { stream: true });
-            await revealCompleteWords();
-        }
-        pendingText += decoder.decode();
-        await revealCompleteWords();
-        aiMessage.textContent += pendingText;
-        pendingText = "";
-        chatBox.scrollTop = chatBox.scrollHeight;
-        if (!aiMessage.textContent.trim()) {
-            throw new Error("The AI service returned an empty response");
-        }
-
-    } catch (err) {
-        const errorText = "Error connecting to the AI service. Please make sure the backend is running and GROQ_API_KEY is configured.";
-        aiMessage.textContent += pendingText;
-        aiMessage.textContent += aiMessage.textContent ? `\n\n${errorText}` : errorText;
-        console.error(err);
-    } finally {
-        aiMessage.classList.remove("streaming-cursor");
-        sendBtn.innerHTML = originalBtnHtml;
-        sendBtn.disabled = false;
-        input.focus();
+    async function loadStudentProgress() {
+        const summary = document.getElementById('student-project-summary');
+        const reviewAction = document.getElementById('student-review-action');
+        reviewAction.hidden = true;
+        try {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/student/project-progress`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not load project progress.');
+            summary.textContent = `${data.project_name || 'No project selected'} · ${data.submission_status.replaceAll('_', ' ')}`;
+            renderRepository(data.github_url);
+            document.getElementById('student-project-title').textContent = data.project_name || 'Project not yet selected';
+            document.getElementById('student-project-team').textContent = data.team_name || '—';
+            document.getElementById('student-project-group').textContent = data.group_no ? `Group ${data.group_no}` : '—';
+            document.getElementById('student-project-mentor').textContent = data.mentor_name || 'Not assigned';
+            document.getElementById('student-project-status').textContent = data.submission_status.replaceAll('_', ' ');
+            document.getElementById('student-project-members').textContent = data.members.length
+                ? data.members.map(member => member.name === member.roll_no ? member.roll_no : `${member.name} (${member.roll_no})`).join(', ')
+                : 'No team members yet';
+            document.getElementById('student-project-abstract').textContent = data.project_abstract || 'No abstract submitted yet.';
+            const activeReview = data.active_review;
+            const milestones = [
+                { label: 'Project idea', done: data.submission_status === 'accepted', active: data.submission_status === 'pending' },
+                { label: 'Review 1', done: data.review1 === 'completed', active: activeReview?.number === 1 },
+                { label: 'Review 2', done: data.review2 === 'completed', active: activeReview?.number === 2 },
+                { label: 'Review 3', done: data.review3 === 'completed', active: activeReview?.number === 3 },
+                { label: 'Research paper', done: Boolean(data.documents.research_paper), active: false },
+                { label: 'Project report', done: Boolean(data.documents.project_report), active: false }
+            ];
+            const completed = milestones.filter(item => item.done).length;
+            document.getElementById('student-progress-percent').textContent = `${Math.round(completed / milestones.length * 100)}%`;
+            document.getElementById('student-progress-bar').style.width = `${Math.round(completed / milestones.length * 100)}%`;
+            const list = document.getElementById('student-progress-milestones');
+            list.replaceChildren();
+            for (const {label, done, active} of milestones) {
+                const item = document.createElement('li');
+                item.className = done ? 'completed' : active ? 'active' : 'pending';
+                const icon = document.createElement('i');
+                icon.className = done ? 'ph-fill ph-check-circle' : active ? 'ph-fill ph-spinner-gap' : 'ph ph-circle';
+                icon.setAttribute('aria-hidden', 'true');
+                item.append(icon, document.createTextNode(label));
+                list.append(item);
+            }
+            if (activeReview) {
+                reviewAction.hidden = false;
+                document.getElementById('student-progress-slot').value = activeReview.slot;
+                document.getElementById('student-review-title').textContent = `${activeReview.label} submission`;
+                const when = activeReview.date ? `Scheduled ${activeReview.date}${activeReview.time ? ` at ${activeReview.time}` : ''}. ` : '';
+                document.getElementById('student-review-description').textContent = `${when}${activeReview.status === 'pending' ? 'Your document is submitted and awaiting completion. You can replace it.' : 'Your mentor has assigned this review. Upload its document here.'}`;
+                document.getElementById('student-review-submit').textContent = activeReview.status === 'pending' ? `Replace ${activeReview.label} document` : `Submit ${activeReview.label} document`;
+            }
+            document.getElementById('student-topic-change-section').hidden = data.submission_status !== 'accepted';
+            document.getElementById('student-topic-change-status').textContent = data.topic_change ? `Latest topic change request: ${data.topic_change}` : '';
+        } catch (error) { summary.textContent = error.message; document.getElementById('student-topic-change-section').hidden = true; }
     }
-}
+    document.getElementById('student-progress-upload-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const status = document.getElementById('student-progress-upload-status');
+        const slot = document.getElementById('student-progress-slot').value;
+        const payload = new FormData();
+        payload.append('file', document.getElementById('student-progress-file').files[0]);
+        status.textContent = 'Uploading…';
+        try {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/student/project-documents/${slot}`, { method: 'POST', body: payload });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Upload failed.');
+            status.textContent = `${data.filename} uploaded.`;
+            await loadStudentProgress();
+        } catch (error) { status.textContent = error.message; }
+    });
+    document.getElementById('student-dashboard-github-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const status = document.getElementById('student-repository-status');
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        button.disabled = true;
+        status.textContent = 'Saving repository…';
+        try {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/my-team/github`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ github_url: document.getElementById('student-dashboard-github').value })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not save repository.');
+            renderRepository(data.github_url);
+            status.textContent = data.github_url ? 'Repository saved.' : 'Repository link removed.';
+        } catch (error) { status.textContent = error.message; }
+        finally { button.disabled = false; }
+    });
+    document.getElementById('student-topic-change-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const status = document.getElementById('student-topic-change-status');
+        try {
+            const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/student/topic-change-requests`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ proposed_title: document.getElementById('student-new-title').value,
+                    proposed_abstract: document.getElementById('student-new-abstract').value,
+                    reason: document.getElementById('student-change-reason').value })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not send request.');
+            status.textContent = 'Topic change request sent to your mentor.';
+            await loadStudentProgress();
+        } catch (error) { status.textContent = error.message; }
+    });
+    window.loadStudentProgress = loadStudentProgress;
+    loadStudentProgress();
+    window.addEventListener('focus', () => {
+        if (!document.getElementById('view-find').classList.contains('hidden')) loadStudentProgress();
+        if (!document.getElementById('view-team').classList.contains('hidden')) fetchStudentTeam(activeUser);
+    });
+    setInterval(() => {
+        if (document.visibilityState === 'visible' && !document.getElementById('view-find').classList.contains('hidden')) loadStudentProgress();
+        if (document.visibilityState === 'visible' && !document.getElementById('view-team').classList.contains('hidden')) fetchStudentTeam(activeUser);
+    }, 30000);
+});
 async function submitProject() {
     const titleEl = document.getElementById("project-title");
     const descEl = document.getElementById("project-desc");
@@ -981,6 +1022,27 @@ async function submitProject() {
         titleEl.focus();
         return;
     }
+    if (!descEl.value.trim()) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Please fill in the Project Abstract.';
+        errorPanel.hidden = false;
+        descEl.focus();
+        return;
+    }
+    const selectedFile = document.getElementById('submission-form')._selectedFile;
+    if (!selectedFile) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Please attach a project document.';
+        errorPanel.hidden = false;
+        return;
+    }
+    const checkToken = document.getElementById('submission-form').dataset.checkToken;
+    if (!checkToken) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Check similarity before submitting.';
+        errorPanel.hidden = false;
+        return;
+    }
 
     const data = {
         project_name: titleEl.value.trim(),
@@ -989,13 +1051,16 @@ async function submitProject() {
 
     const btnSubmit = document.getElementById("btn-submit");
     btnSubmit.disabled = true;
-    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Checking and submitting...';
+    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Submitting...';
 
     try {
-        const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/submit-project`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data)
+        const payload = new FormData();
+        payload.append('project_name', data.project_name);
+        payload.append('project_abstract', data.project_abstract);
+        payload.append('file', selectedFile);
+        payload.append('check_token', checkToken);
+        const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/submit-project-with-file`, {
+            method: "POST", body: payload
         });
 
         if (!res.ok) {
@@ -1004,6 +1069,7 @@ async function submitProject() {
         }
 
         const result = await res.json();
+        delete document.getElementById('submission-form').dataset.checkToken;
         window.projectGuardFeedback.notify(result.message || 'Project submitted successfully.', 'success');
         const reviewStatus = document.getElementById('project-review-status');
         if (reviewStatus) {
@@ -1013,13 +1079,15 @@ async function submitProject() {
         }
         btnSubmit.innerHTML = '<i class="ph ph-check"></i> Submitted';
         btnSubmit.style.background = "var(--status-verified)";
+        if (window.loadStudentProgress) await window.loadStudentProgress();
     } catch (err) {
         const errorPanel = document.getElementById('upload-error');
         if (errorPanel) {
             errorPanel.textContent = `Submission failed: ${err.message}`;
             errorPanel.hidden = false;
         }
-        btnSubmit.disabled = /^Submission blocked:/.test(err.message);
+        delete document.getElementById('submission-form').dataset.checkToken;
+        btnSubmit.disabled = true;
         btnSubmit.innerHTML = '<i class="ph ph-upload-simple"></i> Submit Your Project';
     }
 }

@@ -50,8 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>`).join('') : '';
         if (!group) {
             stream.textContent = role === 'student'
-                ? 'Your mentor needs to assign your PRN / roll number to a group in their student roster.'
-                : 'Assign students to a group in your student roster to start chatting.';
+                ? 'Join a team to start a group chat.'
+                : 'Assign students to a team or group to start chatting.';
         }
     }
 

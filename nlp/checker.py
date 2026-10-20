@@ -66,7 +66,7 @@ def load_training_projects(exclude_project_id: int | None = None) -> list[Traini
 
 def determine_risk(score: float) -> str:
     if score < 25:   return "Low"
-    elif score < 55: return "Medium"
+    elif score <= 30: return "Medium"
     else:            return "High"
 
 
@@ -104,10 +104,12 @@ def run_plagiarism_check(
             "matched_project"   : "N/A",
             "matched_group"     : "N/A",
             "matched_year"      : "N/A",
-            "error"             : "No projects in database to compare against."
+            "comparison_count"  : 0,
         }
 
-    abstracts_clean = preprocess_batch([p["project_abstract"] or "" for p in projects])
+    abstracts_clean = preprocess_batch([
+        f"{p['project_name'] or ''} {p['project_abstract'] or ''}" for p in projects
+    ])
 
     # Layer 1 — TF-IDF
     print("[Checker] Running TF-IDF layer...")
@@ -151,6 +153,9 @@ def run_plagiarism_check(
         weights = {"tfidf": WEIGHT_TFIDF, "lda": WEIGHT_LDA, "sbert": WEIGHT_SBERT}
         topics = get_topic_labels(lda_model, count_vec)
 
+    if not all(np.isfinite(score) for score in combined):
+        raise RuntimeError("Similarity model returned a non-finite score.")
+    combined = [max(0.0, min(1.0, score)) for score in combined]
     best_i    = int(np.argmax(combined))
     best      = projects[best_i]
     final_pct = round(combined[best_i] * 100, 2)

@@ -33,7 +33,8 @@ def redeem_student(db, subject, roll_no, year, code):
         raise HTTPException(409, "This roll number already has a linked or ambiguous profile.")
     profile = profiles[0] if profiles else Student(roll_no=grant.roll_no)
     profile.clerk_user_id = subject
-    profile.year = grant.year
+    profile.year = grant.year if grant.year in {"2", "3", "4"} else "3"
+    profile.department = "aiml"
     db.add(profile)
     grant.used_at = now
     grant.used_by_clerk_user_id = subject

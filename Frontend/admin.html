@@ -12,7 +12,7 @@
 <body data-clerk-ui="true">
   <main>
     <h1>Enrollment administration</h1>
-    <p>Verify each recipient against an authoritative school or staff record. Deliver codes only through a private contact channel already known to the institution.</p>
+    <p>Enrollment codes let a student or mentor link a new login to their school record. Before creating a code, check who will receive it so someone else cannot claim that record.</p>
     <div id="signin"></div>
     <button id="signout" hidden>Sign out</button>
     <p id="message" role="status" aria-live="polite"></p>
@@ -31,6 +31,7 @@
           <input type="hidden" name="role" id="enrollment-role" value="student">
           <label><span id="identifier-label">Roll number</span> <input name="roll_no" required maxlength="64"></label>
           <label id="year-field">Year <input name="year" required maxlength="64"></label>
+          <p>How did you confirm this person's identity? This check is recorded with the code for the enrollment audit.</p>
           <label>Identity checked using
             <select name="verification_method" required>
               <option value="">Choose verification method</option>
@@ -39,7 +40,7 @@
               <option value="in_person">In person with institution ID</option>
             </select>
           </label>
-          <label><input type="checkbox" name="recipient_verified" required> I verified this recipient and will send the code privately.</label>
+          <label><input type="checkbox" name="recipient_verified" required> I checked the recipient and will send the code through a private contact channel.</label>
           <label>Valid for (hours) <input name="expires_hours" type="number" min="1" max="168" value="72" required></label>
           <button type="submit">Generate code</button>
         </form>

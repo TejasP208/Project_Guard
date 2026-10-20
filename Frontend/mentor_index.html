@@ -10,11 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css?v=project-details-4">
+    <link rel="stylesheet" href="mentor_sytle.css?v=axiom-history-1">
     <link rel="stylesheet" href="group_connect.css">
+    <link rel="stylesheet" href="axiom_dashboard.css?v=2">
     <link rel="stylesheet" href="feedback.css">
     <script src="feedback.js?v=accessible-feedback-1" defer></script>
-    <script src="group_connect.js?v=project-visibility-1" defer></script>
+    <script src="group_connect.js?v=team-membership-1" defer></script>
     <script src="deployment-config.js"></script>
     <script src="clerk-config.js?v=portal-startup-3"></script>
     <script src="auth-retry.js?v=clock-retry-1"></script>
@@ -47,6 +48,10 @@
                 <a href="#" class="nav-item" id="nav-group-connect">
                     <i class="ph ph-chats-teardrop"></i>
                     <span>Group Connect</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-axiom">
+                    <i class="ph ph-sparkle"></i>
+                    <span>Axiom</span>
                 </a>
             </nav>
 
@@ -87,7 +92,7 @@
             <div id="view-dashboard" class="content-view">
                 <!-- Dashboard Stats Row -->
                 <div class="mentor-stats-row">
-                    <div class="mentor-stat-card glass-card">
+                    <div class="mentor-stat-card glass-card" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show assigned students">
                         <div class="stat-icon" style="background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15)); color: var(--primary);">
                             <i class="ph ph-users-three"></i>
                         </div>
@@ -96,16 +101,16 @@
                             <span class="stat-label">Assigned Students</span>
                         </div>
                     </div>
-                    <div class="mentor-stat-card glass-card">
+                    <div class="mentor-stat-card glass-card" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show project idea submissions">
                         <div class="stat-icon" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(52,211,153,0.15)); color: var(--status-verified);">
                             <i class="ph ph-folder-open"></i>
                         </div>
                         <div class="stat-info">
                             <span class="stat-value" id="dashboard-projects">—</span>
-                            <span class="stat-label">Active Projects</span>
+                            <span class="stat-label">Project Idea Submissions</span>
                         </div>
                     </div>
-                    <div class="mentor-stat-card glass-card">
+                    <div class="mentor-stat-card glass-card" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show pending reviews">
                         <div class="stat-icon" style="background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,191,36,0.15)); color: var(--status-pending);">
                             <i class="ph ph-clock-countdown"></i>
                         </div>
@@ -114,7 +119,7 @@
                             <span class="stat-label">Pending Reviews</span>
                         </div>
                     </div>
-                    <div class="mentor-stat-card glass-card">
+                    <div class="mentor-stat-card glass-card" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Show completed reviews">
                         <div class="stat-icon" style="background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.15)); color: var(--status-checking);">
                             <i class="ph ph-calendar-check"></i>
                         </div>
@@ -143,12 +148,29 @@
                 </div>
             </div>
 
+            <!-- View: Axiom AI dashboard -->
+            <div id="view-axiom" class="content-view hidden" data-role="mentor">
+                <div class="axiom-dashboard glass-card">
+                    <div class="axiom-dashboard-heading">
+                        <div class="axiom-dashboard-brand"><span class="axiom-brand-icon" aria-hidden="true"><i class="ph-fill ph-sparkle"></i></span><div><span class="axiom-eyebrow">PROJECTGUARD ASSISTANT</span><h2>Axiom</h2><p>Review ideas, plan feedback, and prepare the next discussion.</p></div></div>
+                        <div class="axiom-dashboard-actions"><span class="axiom-availability"><span aria-hidden="true"></span> Ready to help</span><button type="button" class="axiom-dashboard-clear"><i class="ph ph-plus" aria-hidden="true"></i> New chat</button></div>
+                    </div>
+                    <div class="axiom-dashboard-messages" role="log" aria-label="Axiom conversation" aria-live="polite"></div>
+                    <div class="axiom-composer"><form class="axiom-dashboard-form"><label class="sr-only" for="mentor-axiom-input">Message Axiom</label><textarea id="mentor-axiom-input" maxlength="4000" rows="2" placeholder="Ask about a review, feedback, or project planning…" required></textarea><div class="axiom-composer-footer"><span>Enter to send · Shift+Enter for a new line</span><button type="submit"><span>Send message</span><i class="ph ph-arrow-up" aria-hidden="true"></i></button></div></form><p class="axiom-dashboard-error" role="alert"></p></div>
+                </div>
+            </div>
+
             <!-- View: Project List -->
             <div id="view-project-list" class="content-view hidden">
                 <p id="project-list-feedback" class="student-roster-error" role="alert" aria-live="polite"></p>
                 <div class="glass-card mentor-table-card">
                     <div class="table-header-bar">
-                        <h3><i class="ph ph-users-three"></i> My Assigned Groups</h3>
+                        <h3><i class="ph ph-users-three"></i> All Team Projects</h3>
+                        <div class="project-year-filters" id="project-year-filters" aria-label="Filter by year">
+                            <button type="button" data-year="2" aria-pressed="false">SE</button>
+                            <button type="button" data-year="3" aria-pressed="false">TE</button>
+                            <button type="button" data-year="4" aria-pressed="false">BE</button>
+                        </div>
                         <div class="table-search">
                             <i class="ph ph-magnifying-glass"></i>
                             <input type="text" placeholder="Search projects..." id="project-search">
@@ -160,33 +182,11 @@
                                 <tr>
                                     <th>Group</th>
                                     <th>Project Name</th>
-                                    <th>Details</th>
+                                    <th>Year</th><th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="3">Loading assigned groups…</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="glass-card mentor-table-card" style="margin-top: 24px;">
-                    <div class="table-header-bar">
-                        <h3><i class="ph ph-clock"></i> Submitted — Awaiting Acceptance</h3>
-                    </div>
-                    <div class="table-wrapper">
-                        <table class="mentor-table" id="pending-projects-table">
-                            <thead>
-                                <tr>
-                                    <th>Project Title</th>
-                                    <th>Team</th>
-                                    <th>Year</th>
-                                    <th>Details</th>
-                                    <th>Action</th>
-                                    <th>AI Assist</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="6">Loading submitted projects…</td></tr>
+                                <tr><td colspan="4">Loading teams…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -366,6 +366,44 @@
         </div>
     </div>
 
+    <!-- Dashboard card list -->
+    <div class="review-modal-overlay" id="mentor-dashboard-list-modal" role="dialog" aria-modal="true" aria-labelledby="mentor-dashboard-list-title">
+        <div class="review-modal glass-card mentor-dashboard-list-modal">
+            <div class="modal-header">
+                <h2 id="mentor-dashboard-list-title">Dashboard details</h2>
+                <button class="modal-close-btn" id="mentor-dashboard-list-close" type="button" aria-label="Close dashboard list"><i class="ph ph-x"></i></button>
+            </div>
+            <div id="mentor-dashboard-list" class="mentor-dashboard-list" aria-live="polite"></div>
+            <div class="modal-actions"><button class="btn btn-secondary" id="mentor-dashboard-list-dismiss" type="button">Close</button></div>
+        </div>
+    </div>
+
+    <!-- Topic change review -->
+    <div class="review-modal-overlay" id="topic-change-details-modal" role="dialog" aria-modal="true" aria-labelledby="topic-change-details-title">
+        <div class="review-modal glass-card project-details-modal">
+            <div class="modal-header">
+                <h2 id="topic-change-details-title">Topic change request</h2>
+                <button class="modal-close-btn" id="topic-change-details-close" type="button" aria-label="Close topic change"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="project-details-body">
+                <dl class="project-details-grid">
+                    <div><dt>Group</dt><dd id="topic-change-group"></dd></div>
+                    <div><dt>Current project</dt><dd id="topic-change-current"></dd></div>
+                    <div class="project-details-wide"><dt>Team members</dt><dd id="topic-change-members"></dd></div>
+                </dl>
+                <section class="project-details-section"><h3>Proposed project idea</h3><p id="topic-change-proposed-title"></p></section>
+                <section class="project-details-section"><h3>Proposed abstract</h3><p id="topic-change-proposed-abstract" class="project-details-abstract"></p></section>
+                <section class="project-details-section"><h3>Reason for change</h3><p id="topic-change-reason"></p></section>
+                <p id="topic-change-details-error" class="student-roster-error" role="alert"></p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="topic-change-details-cancel" type="button">Cancel</button>
+                <button class="btn btn-danger" id="topic-change-details-reject" type="button">Reject</button>
+                <button class="btn btn-primary" id="topic-change-details-accept" type="button">Accept</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Project details -->
     <div class="review-modal-overlay" id="project-details-modal" role="dialog" aria-modal="true" aria-labelledby="project-details-title">
         <div class="review-modal glass-card project-details-modal">
@@ -378,6 +416,8 @@
                 <dl class="project-details-grid">
                     <div><dt>Group number</dt><dd id="project-details-group"></dd></div>
                     <div><dt>Academic year</dt><dd id="project-details-year"></dd></div>
+                    <div><dt>Department</dt><dd id="project-details-department"></dd></div>
+                    <div><dt>Mentor</dt><dd id="project-details-mentor"></dd></div>
                     <div class="project-details-wide"><dt>Team</dt><dd id="project-details-team"></dd></div>
                     <div class="project-details-wide"><dt>Students</dt><dd id="project-details-members"></dd></div>
                 </dl>
@@ -397,6 +437,10 @@
                     <h3><i class="ph ph-text-align-left" aria-hidden="true"></i> Abstract</h3>
                     <p id="project-details-abstract" class="project-details-abstract"></p>
                 </section>
+                <section class="project-details-section">
+                    <h3><i class="ph ph-file-text" aria-hidden="true"></i> Submitted documents</h3>
+                    <div id="project-details-documents"></div>
+                </section>
                 <p id="project-details-error" class="student-roster-error" role="alert"></p>
             </div>
             <div class="modal-actions">
@@ -415,7 +459,7 @@
                     <h2><i class="ph ph-sparkle"></i> Ask Axiom AI</h2>
                     <p id="axiom-project-context" class="axiom-project-context"></p>
                 </div>
-                <button class="modal-close-btn" id="axiom-modal-close" type="button" aria-label="Close Axiom AI"><i class="ph ph-x"></i></button>
+                <div class="axiom-modal-actions"><button class="btn-table-action" id="axiom-modal-new-chat" type="button">New chat</button><button class="modal-close-btn" id="axiom-modal-close" type="button" aria-label="Close Axiom AI"><i class="ph ph-x"></i></button></div>
             </div>
             <div class="axiom-chat-stream" id="axiom-chat-stream" aria-live="polite"></div>
             <form class="axiom-chat-form" id="axiom-chat-form">
@@ -606,9 +650,10 @@
         {
             const navConfig = {
                 'nav-dashboard':     { view: 'view-dashboard',     title: 'Mentor Dashboard',  subtitle: 'Overview of your assigned student groups' },
-                'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Manage and review all assigned projects' },
+                'nav-project-list':  { view: 'view-project-list',  title: 'Project List',      subtitle: 'Browse all team projects' },
                 'nav-student-list':  { view: 'view-student-list',  title: 'Student List',      subtitle: 'View all students under your mentorship' },
                 'nav-group-connect': { view: 'view-group-connect', title: 'Group Connect',     subtitle: 'Make groups to chat with the assigned student groups' },
+                'nav-axiom':         { view: 'view-axiom',         title: 'Axiom',             subtitle: 'Your academic project assistant' },
             };
 
             const mainTitle = document.getElementById('main-title');
@@ -659,6 +704,9 @@
             // Load Projects from API
             // ============================================
             let projectCatalog = new Map();
+            let teamProjectCatalog = new Map();
+            let selectedProjectYear = '';
+            let projectListRequest = 0;
             let rosterProjectCatalog = new Map();
             const projectDetailsModal = document.getElementById('project-details-modal');
             const projectDetailsAccept = document.getElementById('project-details-accept');
@@ -713,17 +761,19 @@
                 projectDetailsReject.classList.add('hidden');
                 projectDetailsModal.classList.add('active');
                 try {
-                    let project = rosterProjectCatalog.get(String(projectId));
+                    let project = String(projectId).startsWith('project:') ? null : (teamProjectCatalog.get(String(projectId)) || rosterProjectCatalog.get(String(projectId)));
                     if (!project) {
-                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(projectId)}`);
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects/${encodeURIComponent(String(projectId).replace(/^project:/, ''))}`);
                         project = await response.json();
                         if (!response.ok) throw new Error(typeof project.detail === 'string' ? project.detail : 'Could not load project.');
                     }
                     document.getElementById('project-details-title').textContent = project.project_name || 'Not yet assigned';
-                    document.getElementById('project-details-status').textContent = project.roster_only ? 'Assigned in mentor roster' : project.can_assign ? 'Submitted · Awaiting acceptance' : 'Assigned to you';
+                    document.getElementById('project-details-status').textContent = project.can_assign ? 'Submitted · Awaiting acceptance' : project.project_name ? 'Project selected' : 'Project not yet selected';
                     document.getElementById('project-details-team').textContent = project.team || '—';
                     document.getElementById('project-details-group').textContent = project.group_no || 'Assigned after acceptance';
                     document.getElementById('project-details-year').textContent = project.year || '—';
+                    document.getElementById('project-details-department').textContent = (project.department || 'aiml').toUpperCase();
+                    document.getElementById('project-details-mentor').textContent = project.mentor_name || 'Not assigned';
                     document.getElementById('project-details-members').textContent = project.members.length ? project.members.join(', ') : 'No current members';
                     document.getElementById('project-details-project-name').textContent = project.project_name || 'Not yet assigned';
                     if (project.github_url) {
@@ -738,6 +788,7 @@
                         }
                     }
                     const checklist = document.getElementById('project-details-checklist');
+                    checklist.closest('.project-details-section').classList.add('hidden');
                     const steps = [
                         ['Team assigned', true],
                         ['Project name provided', Boolean(project.project_name)],
@@ -755,14 +806,28 @@
                         checklist.append(item);
                     }
                     document.getElementById('project-details-abstract').textContent = project.project_abstract || 'No abstract provided.';
-                    if (project.can_assign) {
+                    const documents = document.getElementById('project-details-documents');
+                    documents.replaceChildren();
+                    for (const documentInfo of project.documents || []) {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'btn-table-action';
+                        button.dataset.documentTeam = project.team_id || project.id;
+                        button.dataset.documentSlot = documentInfo.slot;
+                        button.dataset.documentFilename = documentInfo.filename;
+                        button.textContent = `${documentInfo.slot.replaceAll('_', ' ')}: ${documentInfo.filename}`;
+                        documents.append(button);
+                    }
+                    if (!documents.childElementCount) documents.textContent = 'No documents uploaded yet.';
+                    if (project.can_assign && !teamProjectCatalog.has(String(projectId))) {
+                        document.getElementById('project-details-dismiss').textContent = 'Cancel';
                         projectDetailsAccept.dataset.projectId = String(project.id);
                         projectDetailsAccept.disabled = false;
                         projectDetailsAccept.classList.remove('hidden');
                         projectDetailsReject.dataset.projectId = String(project.id);
                         projectDetailsReject.disabled = false;
                         projectDetailsReject.classList.remove('hidden');
-                    }
+                    } else document.getElementById('project-details-dismiss').textContent = 'Close';
                     document.getElementById('project-details-close').focus();
                 } catch (loadError) {
                     document.getElementById('project-details-title').textContent = 'Project unavailable';
@@ -774,79 +839,84 @@
             document.getElementById('project-details-close').addEventListener('click', closeProjectDetails);
             document.getElementById('project-details-dismiss').addEventListener('click', closeProjectDetails);
             projectDetailsModal.addEventListener('click', event => { if (event.target === projectDetailsModal) closeProjectDetails(); });
+            document.getElementById('project-details-documents').addEventListener('click', async event => {
+                const button = event.target.closest('[data-document-slot]');
+                if (!button) return;
+                button.disabled = true;
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/teams/${button.dataset.documentTeam}/documents/${button.dataset.documentSlot}`);
+                    if (!response.ok) throw new Error('Could not download document.');
+                    const url = URL.createObjectURL(await response.blob());
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = button.dataset.documentFilename;
+                    link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) { window.projectGuardFeedback.notify(error.message, 'error'); }
+                button.disabled = false;
+            });
             projectDetailsAccept.addEventListener('click', () => acceptProject(projectDetailsAccept.dataset.projectId, projectDetailsAccept));
             projectDetailsReject.addEventListener('click', () => rejectProject(projectDetailsReject.dataset.projectId, projectDetailsReject));
 
             async function loadProjects() {
                 const assignedBody = document.querySelector('#assigned-projects-table tbody');
-                const pendingBody = document.querySelector('#pending-projects-table tbody');
-                if (!assignedBody || !pendingBody) return;
-                assignedBody.innerHTML = '<tr><td colspan="3">Loading assigned groups…</td></tr>';
-                pendingBody.innerHTML = '<tr><td colspan="6">Loading submitted projects…</td></tr>';
-
+                if (!assignedBody) return;
+                const requestNumber = ++projectListRequest;
+                assignedBody.innerHTML = '<tr><td colspan="4">Loading teams…</td></tr>';
                 try {
-                    const projectResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/api/projects`);
-                    if (!projectResponse.ok) throw new Error('Failed to fetch projects');
-                    const projects = await projectResponse.json();
-                    let roster = [];
-                    try {
-                        const rosterResponse = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/students`);
-                        if (rosterResponse.ok) roster = await rosterResponse.json();
-                    } catch (rosterError) {
-                        console.warn('Could not load assigned mentor roster:', rosterError);
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/team-projects`);
+                    if (!response.ok) {
+                        const payload = await response.json().catch(() => ({}));
+                        const detail = typeof payload.detail === 'string' ? payload.detail : '';
+                        throw new Error(response.status === 404
+                            ? 'The team directory is unavailable on the API server. Deploy the current backend and try again.'
+                            : detail || `Team directory request failed (${response.status}).`);
                     }
-                    projectCatalog = new Map(projects.map(project => [String(project.id), project]));
-                    const assigned = projects.filter(project => project.assigned_to_me);
-                    const pending = projects.filter(project => project.can_assign);
-                    const canonicalTeams = new Set(projects.map(project => project.team).filter(Boolean));
-                    for (const student of roster) {
-                        for (const project of projects) {
-                            if (project.team === student.team_name && student.github_url) project.github_url = student.github_url;
-                        }
-                    }
-                    rosterProjectCatalog = new Map();
-                    for (const student of roster) {
-                        const team = student.team_name !== 'No Group' ? student.team_name : (student.group_number ? `Group ${student.group_number}` : '');
-                        if (!team || canonicalTeams.has(team)) continue;
-                        const id = `roster:${team}`;
-                        let entry = rosterProjectCatalog.get(id);
-                        if (!entry) {
-                            const match = /^Group\s+(\d+)$/i.exec(team);
-                            entry = { id, team, group_no: match ? match[1] : student.group_number,
-                                project_name: student.project_name === 'No Project' ? '' : student.project_name,
-                                year: student.year, members: [], project_abstract: '',
-                                github_url: student.github_url, roster_only: true };
-                            rosterProjectCatalog.set(id, entry);
-                        }
-                        if (student.prn) entry.members.push(`${student.student_name || student.prn} (${student.prn})`);
-                        if (!entry.project_name && student.project_name !== 'No Project') entry.project_name = student.project_name;
-                    }
-                    const rosterProjects = [...rosterProjectCatalog.values()];
-                    assignedBody.innerHTML = assigned.length || rosterProjects.length ? [...assigned, ...rosterProjects].map(project => `
-                        <tr data-open-project-id="${escapeHtml(project.id)}">
-                            <td>${escapeHtml(project.group_no ? `Group ${project.group_no}` : project.team || 'Group —')}</td>
-                            <td class="project-name">${escapeHtml(project.project_name || 'Not yet assigned')}</td>
-                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
-                        </tr>`).join('') : '<tr><td colspan="3">No groups assigned to you yet.</td></tr>';
-                    pendingBody.innerHTML = pending.length ? pending.map(project => `
-                        <tr data-open-project-id="${escapeHtml(project.id)}">
-                            <td class="project-name">${escapeHtml(project.project_name || 'Untitled')}</td>
-                            <td>${escapeHtml(project.team || '—')}</td>
-                            <td>${escapeHtml(project.year || '—')}</td>
-                            <td><button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(project.id)}">View details</button></td>
-                            <td><button class="btn btn-primary" type="button" data-assign-project-id="${escapeHtml(project.id)}">Accept</button></td>
-                            <td><button class="btn-axiom-ai" type="button" data-project-id="${escapeHtml(project.id)}"><i class="ph ph-sparkle"></i> Ask Axiom AI</button></td>
-                        </tr>`).join('') : '<tr><td colspan="6">No submissions awaiting acceptance.</td></tr>';
+                    const teams = await response.json();
+                    if (!Array.isArray(teams)) throw new Error('The team directory returned an unexpected response.');
+                    if (requestNumber !== projectListRequest) return;
+                    teamProjectCatalog = new Map(teams.map(team => [String(team.id), team]));
+                    const visible = teams.filter(team => !selectedProjectYear || String(team.year) === selectedProjectYear);
+                    assignedBody.innerHTML = visible.length ? visible.map(team => `
+                        <tr>
+                            <td>Group ${escapeHtml(team.group_no)}</td>
+                            <td class="project-name">${escapeHtml(team.project_name || 'Not yet selected')}</td>
+                            <td>${escapeHtml(({2:'SE',3:'TE',4:'BE'})[String(team.year)] || team.year || '—')}</td>
+                            <td class="project-row-actions">
+                                <button class="btn-table-action" type="button" data-view-project-id="${escapeHtml(team.id)}" aria-label="Information for group ${escapeHtml(team.group_no)}"><i class="ph ph-info"></i> Info</button>
+                                <button class="btn-axiom-ai" type="button" data-team-ai-id="${escapeHtml(team.id)}"><i class="ph ph-sparkle"></i> AI chat</button>
+                            </td>
+                        </tr>`).join('') : '<tr><td colspan="4">No teams found for this year.</td></tr>';
                     document.getElementById('project-search').dispatchEvent(new Event('input'));
-
                 } catch (error) {
                     console.error('Error loading projects:', error);
-                    assignedBody.innerHTML = '<tr><td colspan="3">Could not load assigned groups.</td></tr>';
-                    pendingBody.innerHTML = '<tr><td colspan="6">Could not load submitted projects.</td></tr>';
+                    if (requestNumber !== projectListRequest) return;
+                    assignedBody.innerHTML = `<tr><td colspan="4"><span role="alert">${escapeHtml(error.message || 'Could not load teams.')}</span> <button type="button" class="btn-table-action" id="retry-project-list">Try again</button></td></tr>`;
                 }
             }
+            document.querySelector('#assigned-projects-table tbody').addEventListener('click', event => {
+                if (event.target.closest('#retry-project-list')) loadProjects();
+            });
+            document.getElementById('project-year-filters').addEventListener('click', event => {
+                const button = event.target.closest('[data-year]');
+                if (!button) return;
+                selectedProjectYear = selectedProjectYear === button.dataset.year ? '' : button.dataset.year;
+                document.querySelectorAll('#project-year-filters [data-year]').forEach(item => {
+                    item.setAttribute('aria-pressed', String(item.dataset.year === selectedProjectYear));
+                });
+                loadProjects();
+            });
 
             document.getElementById('view-project-list').addEventListener('click', event => {
+                const chat = event.target.closest('[data-team-ai-id]');
+                if (chat) {
+                    const team = teamProjectCatalog.get(String(chat.dataset.teamAiId));
+                    if (team) openTeamProjectChat(team);
+                    else window.projectGuardFeedback.notify('Team details are still loading. Try again in a moment.', 'error');
+                    return;
+                }
+                const reject = event.target.closest('[data-reject-project-id]');
+                if (reject) { rejectProject(reject.dataset.rejectProjectId, reject); return; }
                 const accept = event.target.closest('[data-assign-project-id]');
                 if (accept) { acceptProject(accept.dataset.assignProjectId, accept); return; }
                 if (event.target.closest('.btn-axiom-ai')) return;
@@ -866,8 +936,9 @@
             const axiomSend = document.getElementById('axiom-chat-send');
             const axiomError = document.getElementById('axiom-chat-error');
             let selectedAxiomProject = null;
-            let axiomHistory = [];
+            let selectedAxiomTeam = null;
             let axiomRequestController = null;
+            let axiomHistoryRequest = 0;
 
             function appendAxiomMessage(role, text = '') {
                 const message = document.createElement('div');
@@ -878,36 +949,79 @@
                 return message;
             }
 
+            async function restoreAxiomHistory(scope, id, welcome) {
+                const requestNumber = ++axiomHistoryRequest;
+                axiomStream.textContent = 'Loading conversation…';
+                axiomInput.disabled = true;
+                axiomSend.disabled = true;
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/axiom/history?scope=${scope}&scope_id=${encodeURIComponent(id)}`);
+                    const saved = await response.json().catch(() => []);
+                    if (!response.ok) throw new Error(saved.detail || 'Could not load the conversation.');
+                    if (requestNumber !== axiomHistoryRequest) return;
+                    axiomStream.replaceChildren();
+                    if (saved.length) saved.forEach(turn => appendAxiomMessage(turn.role, turn.content));
+                    else appendAxiomMessage('assistant', welcome);
+                } catch (error) {
+                    if (requestNumber !== axiomHistoryRequest) return;
+                    axiomStream.replaceChildren();
+                    axiomError.textContent = error.message || 'Could not load the conversation.';
+                } finally {
+                    if (requestNumber === axiomHistoryRequest) {
+                        axiomInput.disabled = false;
+                        axiomSend.disabled = false;
+                        if (axiomModal.classList.contains('active')) axiomInput.focus();
+                    }
+                }
+            }
+
             function openAxiomProject(project) {
                 selectedAxiomProject = project;
-                axiomHistory = [];
+                selectedAxiomTeam = null;
                 axiomError.textContent = '';
                 document.getElementById('axiom-project-context').textContent = `${project.project_name || 'Untitled'} · Group ${project.group_no || '—'}`;
-                axiomStream.innerHTML = '';
-                appendAxiomMessage('assistant', `I’m ready to help review “${project.project_name || 'this project'}”. Ask about originality, technical scope, risks, presentation, or improvements.`);
                 axiomModal.classList.add('active');
-                setTimeout(() => axiomInput.focus(), 100);
+                restoreAxiomHistory('project', project.id, `I’m ready to help review “${project.project_name || 'this project'}”. Ask about originality, technical scope, risks, presentation, or improvements.`);
+            }
+
+            function openTeamProjectChat(team) {
+                selectedAxiomProject = null;
+                selectedAxiomTeam = team;
+                document.getElementById('axiom-project-context').textContent = `${team.project_name || 'Not yet selected'} · Group ${team.group_no}`;
+                document.getElementById('axiom-chat-form').classList.remove('hidden');
+                axiomError.textContent = '';
+                axiomModal.classList.add('active');
+                restoreAxiomHistory('team', team.id, 'Ask about this project. Answers use its title, abstract, and uploaded documents when available.');
             }
 
             function closeAxiomProject() {
+                axiomHistoryRequest++;
                 if (axiomRequestController) axiomRequestController.abort();
                 axiomRequestController = null;
                 axiomModal.classList.remove('active');
+                selectedAxiomTeam = null;
             }
 
-            document.getElementById('view-project-list').addEventListener('click', event => {
-                const button = event.target.closest('.btn-axiom-ai[data-project-id]');
-                if (!button) return;
-                const project = projectCatalog.get(button.dataset.projectId);
-                if (project) openAxiomProject(project);
-            });
             document.getElementById('axiom-modal-close').addEventListener('click', closeAxiomProject);
             axiomModal.addEventListener('click', event => { if (event.target === axiomModal) closeAxiomProject(); });
+            document.getElementById('axiom-modal-new-chat').addEventListener('click', async () => {
+                const scope = selectedAxiomTeam ? 'team' : 'project';
+                const id = selectedAxiomTeam?.id || selectedAxiomProject?.id;
+                if (!id) return;
+                if (axiomRequestController) axiomRequestController.abort();
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/axiom/history?scope=${scope}&scope_id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Could not clear the conversation.');
+                    axiomStream.replaceChildren();
+                    appendAxiomMessage('assistant', 'New conversation started. What would you like to ask?');
+                    axiomError.textContent = '';
+                } catch (error) { axiomError.textContent = error.message; }
+            });
 
             document.getElementById('axiom-chat-form').addEventListener('submit', async event => {
                 event.preventDefault();
                 const question = axiomInput.value.trim();
-                if (!question || !selectedAxiomProject || axiomRequestController) return;
+                if (!question || (!selectedAxiomProject && !selectedAxiomTeam) || axiomRequestController) return;
                 axiomInput.value = '';
                 axiomError.textContent = '';
                 appendAxiomMessage('user', question);
@@ -931,14 +1045,41 @@
                     }
                 };
                 try {
+                    if (selectedAxiomTeam) {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/project-chat`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            signal: axiomRequestController.signal,
+                            body: JSON.stringify({ team_id: selectedAxiomTeam.id, question })
+                        });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.detail || 'Project AI could not answer this question.');
+                        reply.textContent = result.answer || 'No answer was returned.';
+                        if (result.sources?.length) {
+                            const sources = document.createElement('div');
+                            sources.className = 'axiom-answer-sources';
+                            sources.append(document.createTextNode('Sources: '));
+                            result.sources.forEach((source, index) => {
+                                const button = document.createElement('button');
+                                button.type = 'button';
+                                button.className = 'btn-table-action';
+                                button.dataset.aiSourceSlot = source.slot;
+                                button.dataset.aiSourceFilename = source.filename;
+                                button.textContent = `[${index + 1}] ${source.filename} · passage ${source.chunk_number}`;
+                                sources.append(button);
+                            });
+                            reply.append(sources);
+                        }
+                        if (result.indexing_pending?.length) axiomError.textContent = 'Some uploaded files could not be indexed yet. This answer may be incomplete.';
+                        axiomStream.scrollTop = axiomStream.scrollHeight;
+                        return;
+                    }
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/axiom-stream`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         signal: axiomRequestController.signal,
                         body: JSON.stringify({
                             question,
-                            project_id: selectedAxiomProject.id,
-                            history: axiomHistory.slice(-8)
+                            project_id: selectedAxiomProject.id
                         })
                     });
                     if (!response.ok) {
@@ -957,7 +1098,6 @@
                     pendingText += decoder.decode();
                     await revealWords(true);
                     if (!reply.textContent.trim()) throw new Error('Axiom AI returned an empty response.');
-                    axiomHistory.push({ role: 'user', content: question }, { role: 'assistant', content: reply.textContent });
                 } catch (error) {
                     if (error.name !== 'AbortError') {
                         reply.remove();
@@ -970,8 +1110,24 @@
                     axiomRequestController = null;
                     axiomSend.disabled = false;
                     axiomInput.disabled = false;
-                    axiomInput.focus();
+                    if (axiomModal.classList.contains('active')) axiomInput.focus();
                 }
+            });
+            axiomStream.addEventListener('click', async event => {
+                const button = event.target.closest('[data-ai-source-slot]');
+                if (!button || !selectedAxiomTeam) return;
+                button.disabled = true;
+                try {
+                    const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/teams/${encodeURIComponent(selectedAxiomTeam.id)}/documents/${encodeURIComponent(button.dataset.aiSourceSlot)}`);
+                    if (!response.ok) throw new Error('Could not download this source document.');
+                    const url = URL.createObjectURL(await response.blob());
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = button.dataset.aiSourceFilename || 'project-document';
+                    link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) { axiomError.textContent = error.message; }
+                finally { button.disabled = false; }
             });
             let rosterStudents = [];
 
@@ -1220,13 +1376,15 @@
                     const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/dashboard`);
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.detail || 'Could not load dashboard.');
+                    dashboardData = data;
                     document.getElementById('dashboard-students').textContent = data.assigned_students;
-                    document.getElementById('dashboard-projects').textContent = data.active_projects;
+                    document.getElementById('dashboard-projects').textContent = data.pending_idea_items.length + data.pending_topic_changes.length;
                     document.getElementById('dashboard-pending').textContent = data.pending_reviews;
                     document.getElementById('dashboard-completed').textContent = data.reviews_done;
                     const notificationCount = document.getElementById('mentor-notification-count');
                     notificationCount.textContent = data.pending_reviews;
                     notificationCount.hidden = data.pending_reviews === 0;
+                    renderDashboardList();
                     if (!data.reviews.length) {
                         activity.innerHTML = '<div class="activity-item"><div class="activity-content"><span class="activity-text"><strong>No review activity yet.</strong> Schedule your first group review above.</span></div></div>';
                         return;
@@ -1250,6 +1408,99 @@
                     activity.innerHTML = `<div class="activity-item"><div class="activity-content"><span class="activity-text" style="color:var(--status-pending);">${escapeHtml(error.message)}</span></div></div>`;
                 }
             }
+
+            let dashboardData = null;
+            let dashboardSection = 'students';
+            const dashboardListModal = document.getElementById('mentor-dashboard-list-modal');
+            const topicChangeModal = document.getElementById('topic-change-details-modal');
+            let selectedTopicChangeId = null;
+            function dashboardRow(main, detail, action) {
+                return `<div class="mentor-dashboard-row"><div class="mentor-dashboard-row-main"><strong>${main}</strong><span>${detail}</span></div>${action}</div>`;
+            }
+            function renderDashboardList() {
+                if (!dashboardData) return;
+                const list = document.getElementById('mentor-dashboard-list');
+                const title = document.getElementById('mentor-dashboard-list-title');
+                const data = dashboardData;
+                if (dashboardSection === 'students') {
+                    title.textContent = 'Assigned students';
+                    list.innerHTML = data.students.map(student => dashboardRow(escapeHtml(student.name), `${escapeHtml(student.prn || '—')} · Group ${escapeHtml(student.group || '—')}`, student.team_id ? `<button type="button" class="btn-table-action" data-dashboard-team="${escapeHtml(student.team_id)}">Info</button>` : '')).join('') || '<p class="mentor-dashboard-empty">No assigned students.</p>';
+                } else if (dashboardSection === 'projects') {
+                    title.textContent = 'Project idea submissions';
+                    list.innerHTML = data.pending_idea_items.map(project => dashboardRow(`Group ${escapeHtml(project.group_no || '—')}`, `${escapeHtml(project.title || 'Not yet selected')} · New idea`, `<button type="button" class="btn-table-action" data-dashboard-project-id="${escapeHtml(project.project_id)}">Info</button>`)).join('') +
+                        data.pending_topic_changes.map(change => dashboardRow(`Group ${escapeHtml(change.group_no || '—')}`, `${escapeHtml(change.proposed_title || 'Untitled idea')} · Topic change request`, `<button type="button" class="btn-table-action" data-dashboard-topic-id="${escapeHtml(change.id)}">Info</button>`)).join('');
+                    if (!list.innerHTML) list.innerHTML = '<p class="mentor-dashboard-empty">No project ideas or topic change requests are waiting.</p>';
+                } else {
+                    const completed = dashboardSection === 'completed';
+                    title.textContent = completed ? 'Reviews done' : 'Pending reviews';
+                    list.innerHTML = data.review_items.filter(item => item.status === (completed ? 'completed' : 'pending')).map(item => dashboardRow(`Group ${escapeHtml(item.group_no || '—')}`, `${escapeHtml(item.title || 'Not yet selected')} · Review ${escapeHtml(item.review)}`, `<div class="mentor-dashboard-row-actions"><button type="button" class="btn-table-action" data-dashboard-team="${escapeHtml(item.team_id)}">Info</button>${completed ? '' : `<button type="button" class="btn-table-action" data-review-team="${escapeHtml(item.team_id)}" data-review-number="${escapeHtml(item.review)}">Mark done</button>`}</div>`)).join('') || '<p class="mentor-dashboard-empty">No reviews in this section.</p>';
+                }
+            }
+            function closeDashboardList() { dashboardListModal.classList.remove('active'); }
+            document.querySelectorAll('.mentor-stats-row .mentor-stat-card').forEach((card, index) => {
+                const open = () => {
+                    dashboardSection = ['students', 'projects', 'pending', 'completed'][index];
+                    renderDashboardList();
+                    dashboardListModal.classList.add('active');
+                    document.getElementById('mentor-dashboard-list-close').focus();
+                };
+                card.addEventListener('click', open);
+                card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+            });
+            document.getElementById('mentor-dashboard-list-close').addEventListener('click', closeDashboardList);
+            document.getElementById('mentor-dashboard-list-dismiss').addEventListener('click', closeDashboardList);
+            dashboardListModal.addEventListener('click', event => { if (event.target === dashboardListModal) closeDashboardList(); });
+            function closeTopicChangeDetails() { topicChangeModal.classList.remove('active'); selectedTopicChangeId = null; }
+            function openTopicChangeDetails(id) {
+                const change = dashboardData?.pending_topic_changes.find(item => String(item.id) === String(id));
+                if (!change) return;
+                selectedTopicChangeId = id;
+                const team = teamProjectCatalog.get(String(change.team_id));
+                document.getElementById('topic-change-group').textContent = change.group_no || '—';
+                document.getElementById('topic-change-current').textContent = team?.project_name || 'Not yet selected';
+                document.getElementById('topic-change-members').textContent = team?.members?.join(', ') || 'No members listed';
+                document.getElementById('topic-change-proposed-title').textContent = change.proposed_title || '—';
+                document.getElementById('topic-change-proposed-abstract').textContent = change.proposed_abstract || 'No abstract provided.';
+                document.getElementById('topic-change-reason').textContent = change.reason || 'No reason provided.';
+                document.getElementById('topic-change-details-error').textContent = '';
+                topicChangeModal.classList.add('active');
+                document.getElementById('topic-change-details-close').focus();
+            }
+            for (const id of ['topic-change-details-close', 'topic-change-details-cancel']) document.getElementById(id).addEventListener('click', closeTopicChangeDetails);
+            topicChangeModal.addEventListener('click', event => { if (event.target === topicChangeModal) closeTopicChangeDetails(); });
+            for (const decision of ['accepted', 'rejected']) {
+                document.getElementById(`topic-change-details-${decision === 'accepted' ? 'accept' : 'reject'}`).addEventListener('click', async event => {
+                    const button = event.currentTarget;
+                    button.disabled = true;
+                    try {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/topic-change-requests/${encodeURIComponent(selectedTopicChangeId)}/${decision}`, { method: 'PATCH' });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.detail || 'Could not decide request.');
+                        closeTopicChangeDetails();
+                        await Promise.all([loadDashboard(), loadProjects()]);
+                    } catch (error) { document.getElementById('topic-change-details-error').textContent = error.message; }
+                    finally { button.disabled = false; }
+                });
+            }
+            document.getElementById('mentor-dashboard-list').addEventListener('click', async event => {
+                const info = event.target.closest('[data-dashboard-team]');
+                if (info) { await loadProjects(); openProjectDetails(info.dataset.dashboardTeam); return; }
+                const idea = event.target.closest('[data-dashboard-project-id]');
+                if (idea) { openProjectDetails(`project:${idea.dataset.dashboardProjectId}`); return; }
+                const topic = event.target.closest('[data-dashboard-topic-id]');
+                if (topic) { await loadProjects(); openTopicChangeDetails(topic.dataset.dashboardTopicId); return; }
+                const reviewButton = event.target.closest('[data-review-team]');
+                if (reviewButton) {
+                    reviewButton.disabled = true;
+                    try {
+                        const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/mentor/teams/${reviewButton.dataset.reviewTeam}/reviews/${reviewButton.dataset.reviewNumber}/complete`, { method: 'PATCH' });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.detail || 'Could not complete review.');
+                        await loadDashboard();
+                    } catch (error) { window.projectGuardFeedback.notify(error.message, 'error'); reviewButton.disabled = false; }
+                    return;
+                }
+            });
 
             document.getElementById('dashboard-activity').addEventListener('click', async event => {
                 const button = event.target.closest('[data-review-action]');
@@ -1311,6 +1562,9 @@
             // Close modal on Escape key
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
+                    if (topicChangeModal.classList.contains('active')) { closeTopicChangeDetails(); return; }
+                    if (projectDetailsModal.classList.contains('active')) { closeProjectDetails(); return; }
+                    if (dashboardListModal.classList.contains('active')) { closeDashboardList(); return; }
                     document.getElementById('review-modal').classList.remove('active');
                     if (axiomModal.classList.contains('active')) closeAxiomProject();
                 }
@@ -1513,5 +1767,6 @@
         })();
     </script>
     <script src="account-actions.js?v=account-actions-2"></script>
+    <script src="axiom_dashboard.js?v=3"></script>
 </body>
 </html>

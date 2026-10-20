@@ -94,7 +94,7 @@ class GroupConnectTests(unittest.TestCase):
         self.assertNotIn("user", message)
         self.assertEqual(self.client.get("/group-connect/groups", params={"role": "mentor", "user": "Dr Rao"}).status_code, 401)
 
-    def test_stale_roster_loses_room_access_when_project_belongs_to_another_mentor(self):
+    def test_team_membership_replaces_stale_roster_room(self):
         self.send("mentor", "Dr Rao", text="Private")
         with self.sessions() as db:
             mentor = db.query(Mentor).filter(Mentor.username == "Dr Shah").one()
@@ -102,9 +102,25 @@ class GroupConnectTests(unittest.TestCase):
             db.add_all([TeamMember(team_id=10, roll_no="S001"), TeamMember(team_id=10, roll_no="S002")])
             db.add(Project(team_id=10, assigned_mentor_id=mentor.id, project_name="Private project"))
             db.commit()
-        self.assertEqual(self.groups("student", "S001"), [])
+        new_room = self.groups("student", "S001")
+        self.assertEqual(len(new_room), 1)
+        self.assertEqual(new_room[0]["mentor"], "Dr Shah")
+        self.assertEqual(new_room[0]["project"], "Private project")
+        self.assertEqual(new_room[0]["members"], ["Asha", "Mira"])
         self.assertEqual(self.groups("mentor", "Dr Rao"), [])
+        self.assertEqual(self.groups("mentor", "Dr Shah")[0]["id"], new_room[0]["id"])
         self.assertEqual(self.messages("student", "S001").status_code, 403)
+
+    def test_team_without_roster_is_available_to_its_members(self):
+        with self.sessions() as db:
+            db.add(Team(id=12, sheet_group_no="12", mentor_name="Dr Shah"))
+            db.add(TeamMember(team_id=12, roll_no="S004"))
+            db.add(Project(team_id=12, project_name="Solar tracker"))
+            db.commit()
+        student_room = self.groups("student", "S004")
+        self.assertEqual(student_room[0]["name"], "Group 12")
+        self.assertEqual(student_room[0]["project"], "Solar tracker")
+        self.assertEqual(student_room[0]["id"], self.groups("mentor", "Dr Shah")[0]["id"])
 
     def test_meeting_links_are_shared_and_invalid_links_and_messages_rejected(self):
         url = "https://meet.google.com/abc-defg-hij"

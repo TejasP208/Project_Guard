@@ -68,11 +68,11 @@ Latest verification: see [release-check-2026-10-07.md](release-check-2026-10-07.
 
 ## Originality score
 
-**Current state:** The PostgreSQL checker combines TF-IDF (60%) and Qwen similarity (40%); these weights and the previously used 30% submission cutoff have not been calibrated because `embeddings/labeled_cases.csv` has no labeled cases. Scores are advisory and submissions are not hard-blocked unless `ORIGINALITY_BLOCK_THRESHOLD` is explicitly configured. Set that value only after representative labeled examples support the selected cutoff. The calibration script evaluates the configured weights; it does not optimize them. LDA/SBERT remain in the legacy SQLite fallback.
+**Current state:** The PostgreSQL checker combines TF-IDF (60%) and Qwen similarity (40%). Students must check their title, abstract, and document before submitting the same content. Scores above 30% are blocked. These weights and cutoff have not been calibrated because `embeddings/labeled_cases.csv` has no labeled cases; evaluate false positives and false negatives before relying on the score as a plagiarism finding. The calibration script evaluates the configured weights; it does not optimize them. LDA/SBERT remain in the legacy SQLite fallback.
 
 **Planned changes:**
 - [x] Use the planned lexical score plus Qwen cosine similarity in the active PostgreSQL checker.
-- [ ] Collect representative labeled cases, evaluate and document the weights and cutoff (including held-out examples), then configure `ORIGINALITY_BLOCK_THRESHOLD` if hard blocking is justified.
+- [ ] Collect representative labeled cases, evaluate and document the weights and 30% cutoff (including held-out examples), then adjust the submission policy if needed.
 - [ ] Remove LDA and SBERT layers if they are no longer part of the design.
 
 ## Documents
