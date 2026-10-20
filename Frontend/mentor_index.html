@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="mentor_sytle.css?v=project-rag-1">
+    <link rel="stylesheet" href="mentor_sytle.css?v=project-rag-2">
     <link rel="stylesheet" href="group_connect.css">
     <link rel="stylesheet" href="feedback.css">
     <script src="feedback.js?v=accessible-feedback-1" defer></script>
@@ -890,6 +890,13 @@
             });
 
             document.getElementById('view-project-list').addEventListener('click', event => {
+                const chat = event.target.closest('[data-team-ai-id]');
+                if (chat) {
+                    const team = teamProjectCatalog.get(String(chat.dataset.teamAiId));
+                    if (team) openTeamProjectChat(team);
+                    else window.projectGuardFeedback.notify('Team details are still loading. Try again in a moment.', 'error');
+                    return;
+                }
                 const reject = event.target.closest('[data-reject-project-id]');
                 if (reject) { rejectProject(reject.dataset.rejectProjectId, reject); return; }
                 const accept = event.target.closest('[data-assign-project-id]');
@@ -936,7 +943,7 @@
                 setTimeout(() => axiomInput.focus(), 100);
             }
 
-            function openTeamAiPreview(team) {
+            function openTeamProjectChat(team) {
                 selectedAxiomProject = null;
                 selectedAxiomTeam = team;
                 axiomHistory = [];
@@ -956,18 +963,6 @@
                 selectedAxiomTeam = null;
             }
 
-            document.getElementById('view-project-list').addEventListener('click', event => {
-                const teamButton = event.target.closest('[data-team-ai-id]');
-                if (teamButton) {
-                    const team = teamProjectCatalog.get(teamButton.dataset.teamAiId);
-                    if (team) openTeamAiPreview(team);
-                    return;
-                }
-                const button = event.target.closest('.btn-axiom-ai[data-project-id]');
-                if (!button) return;
-                const project = projectCatalog.get(button.dataset.projectId);
-                if (project) openAxiomProject(project);
-            });
             document.getElementById('axiom-modal-close').addEventListener('click', closeAxiomProject);
             axiomModal.addEventListener('click', event => { if (event.target === axiomModal) closeAxiomProject(); });
 
