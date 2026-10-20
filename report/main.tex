@@ -1,0 +1,335 @@
+
+\documentclass[12pt,a4paper]{report}
+\usepackage[a4paper,left=1.25in,right=1in,top=1in,bottom=1in,headheight=16pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx,setspace,ragged2e,graphicx,fancyhdr,titlesec,array,amsmath,url,longtable,booktabs}
+\usepackage[hidelinks]{hyperref}
+\onehalfspacing\justifying
+\titleformat{\chapter}[display]{\bfseries\fontsize{14}{18}\selectfont\centering}{CHAPTER \thechapter}{10pt}{\MakeUppercase}
+\titleformat{\section}{\bfseries\fontsize{12}{15}\selectfont}{\thesection}{0.7em}{}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[C]{\small\itshape Chapter \thechapter}
+\fancyfoot[L]{\small\itshape Department of Artificial Intelligence and Machine Learning}
+\fancyfoot[R]{\small\itshape\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyhead[C]{\small\itshape Chapter \thechapter}\fancyfoot[L]{\small\itshape Department of Artificial Intelligence and Machine Learning}\fancyfoot[R]{\small\itshape\thepage}\renewcommand{\headrulewidth}{0pt}}
+\newcommand{\projecttitle}{ProjectGuard: Academic Project Management and Similarity Screening}
+\newcommand{\studentone}{Student Name 1 (Roll No.)}
+\newcommand{\studenttwo}{Student Name 2 (Roll No.)}
+\newcommand{\studentthree}{Student Name 3 (Roll No.)}
+\newcommand{\supervisor}{Dr./Prof. Supervisor Name}
+\begin{document}
+\begin{titlepage}\centering
+{\bfseries\fontsize{14}{18}\selectfont \projecttitle\par}
+\vspace{1cm}Submitted in partial fulfillment of the requirements of the degree\par
+\vspace{0.3cm}{\bfseries BACHELOR OF ENGINEERING IN\par ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING\par}
+\vspace{0.8cm}By\par\vspace{0.3cm}\studentone\par\studenttwo\par\studentthree\par
+\vspace{0.8cm}Supervisor\par\supervisor\par\vfill
+\includegraphics[width=2.6cm]{institute_logo.jpeg}\par\vspace{0.3cm}
+{\bfseries Department of Artificial Intelligence and Machine Learning\par}
+SIES Graduate School of Technology (Autonomous)\par
+Affiliated to University of Mumbai\par Nerul, Navi Mumbai -- 400 706\par
+\vspace{0.4cm}(AY 2026--27)
+\end{titlepage}
+\pagenumbering{roman}
+\chapter*{CERTIFICATE}\addcontentsline{toc}{chapter}{Certificate}
+\vspace{1.5cm}
+This is to certify that the Mini Project entitled \emph{\projecttitle} is the bonafide work of \studentone, \studenttwo, and \studentthree, submitted in partial fulfillment of the requirements for the award of the degree of Bachelor of Engineering in Artificial Intelligence and Machine Learning.
+\vfill
+\noindent\begin{tabular}{p{0.48\textwidth}p{0.48\textwidth}}
+\supervisor & \textbf{Dr. Kalyani Pampattiwar}\\
+Supervisor & Head of Department\\[1.5cm]
+\multicolumn{2}{c}{\textbf{Dr. K. Lakshmisudha}}\\
+\multicolumn{2}{c}{Principal}
+\end{tabular}\clearpage
+\chapter*{MINI PROJECT APPROVAL}\addcontentsline{toc}{chapter}{Mini Project Approval}
+\vspace{1.5cm}
+This Mini Project entitled \emph{\projecttitle} by \studentone, \studenttwo, and \studentthree\ is approved for the degree of Bachelor of Engineering in Artificial Intelligence and Machine Learning.
+\vspace{2cm}\section*{Examiners}\vspace{0.8cm}
+1. \rule{8cm}{0.4pt}\par (Internal Examiner Name and Signature)\par\vspace{1.5cm}
+2. \rule{8cm}{0.4pt}\par (External Examiner Name and Signature)\par
+\vfill Date: \rule{4cm}{0.4pt}\hfill Place: \rule{4cm}{0.4pt}\clearpage
+\chapter*{ABSTRACT}\addcontentsline{toc}{chapter}{Abstract}
+Academic project repositories help students and mentors track submissions, but searching earlier work and identifying potentially overlapping proposals remain difficult when titles and descriptions use different wording. ProjectGuard is a completed and deployed web platform that combines student teams, mentor rosters, project records, an academic assistant, and a hybrid similarity screen. The screen extracts text from PDF, DOCX, or TXT submissions, compares submission text with stored abstracts using TF--IDF, and compares a summary and overlapping document chunks with stored project embeddings. It combines lexical and semantic scores with weights of 0.60 and 0.40. The internal checker ranks the three closest records; the student endpoint returns an advisory score without disclosing those records. PostgreSQL and pgvector store project records and embeddings; FastAPI exposes the interface. The deployed system uses its similarity score as an advisory review signal; this report does not claim a measured detection accuracy or a calibrated hard-block threshold. The score supports human review; it cannot determine academic misconduct.
+\clearpage
+\chapter*{ACKNOWLEDGEMENTS}\addcontentsline{toc}{chapter}{Acknowledgements}
+We thank our supervisor, \supervisor, for guidance during the mini project. We also thank the Department of Artificial Intelligence and Machine Learning at SIES Graduate School of Technology for its support and resources. We acknowledge our teammates and families for their support throughout the project.\clearpage
+\chapter*{LIST OF ABBREVIATIONS}\addcontentsline{toc}{chapter}{List of Abbreviations}
+\begin{tabular}{ll}API & Application Programming Interface\\ DOCX & Microsoft Word Open XML document\\ PDF & Portable Document Format\\ TF--IDF & Term Frequency--Inverse Document Frequency\\ UI & User Interface\\ UML & Unified Modeling Language\end{tabular}\clearpage
+\tableofcontents\clearpage
+\listoffigures\addcontentsline{toc}{chapter}{List of Figures}\clearpage
+\listoftables\addcontentsline{toc}{chapter}{List of Tables}\clearpage
+\chapter*{LIST OF SYMBOLS}\addcontentsline{toc}{chapter}{List of Symbols}
+\begin{tabular}{ll}$L_j$ & Lexical similarity for stored project $j$\\ $S_j$ & Semantic similarity for stored project $j$\\ $H_j$ & Weighted hybrid similarity for stored project $j$\\ $e(\cdot)$ & Text embedding function\end{tabular}\clearpage
+\pagenumbering{arabic}
+\chapter{Introduction}
+\section{Background}
+Academic mini projects produce a continuing collection of ideas, abstracts, teams, and mentor decisions. When those records are scattered across spreadsheets and informal communication, a student may not know whether a proposed topic resembles an earlier submission. A mentor may also need to reconstruct team membership before reviewing a proposal. ProjectGuard brings these activities together in a deployed application. It stores project summaries, connects them to student teams, and offers a similarity check against earlier records.
+
+The application addresses two different questions. The administrative question is who submitted a project, which team owns it, and which mentor is responsible for review. The information retrieval question is which prior projects are most similar to a new description. A ranked match helps direct attention, but it cannot by itself show copying, novelty, or the quality of a technical contribution. This distinction guides the scope of the report and the proposed evaluation.
+
+\section{Motivation}
+A title or abstract often contains terms common to an entire field. Two unrelated machine learning projects may both mention classification, neural networks, and real-time data. Conversely, a student can describe an earlier idea with new vocabulary. A screen based only on shared words will miss some related proposals and overstate some generic overlaps. Dense embeddings can add semantic information, but broad topic similarity remains a risk.
+
+The project also responds to workflow needs. Team formation, proposal submission, mentor assignment, and review scheduling are related tasks. Recording them in one database makes it easier to display the context around a result. The deployed implementation combines a student portal, mentor portal, administrative enrollment operations, project records, and a checker. The report describes the integrated application as implemented, rather than presenting the checker as a stand-alone plagiarism detector.
+
+\section{Problem Statement}
+The project problem is to maintain a traceable record of academic mini project submissions while giving students and mentors a way to identify prior projects that warrant comparison. The system must accept a project title and abstract, associate them with a team, preserve earlier records, and rank candidates when a user checks a new description or document. It should communicate uncertainty: a high score is a cue for inspection, not a final accusation.
+
+The deployed application operates within defined processing and service limits. Uploaded content can be large or malformed, the embedding service can fail, and database records may lack vectors. The server must distinguish invalid input from a temporary service failure. A reviewer also needs to understand what text was compared, whether truncation occurred, and which parts of the score are lexical or semantic. These constraints are part of the problem definition rather than incidental implementation details.
+
+\section{Objectives}
+The first objective is to support student identity linking, team creation or joining, and a team-owned project submission. The second is to give mentors access to project and roster information, assignment actions, and review scheduling. The third is to build a document-checking path for PDF, DOCX, and UTF-8 TXT inputs. The fourth is to combine TF--IDF and embedding similarity in a reproducible scoring rule. The fifth is to state clearly which measurements are available and which require a future labeled study.
+
+Success for the application layer means that authorized users can complete the intended workflow and that records remain associated with the correct team. Success for the screening layer cannot be defined only as a returned number. It requires a labeled collection of related and unrelated submissions, a clear review procedure, and held-out evaluation. This report does not substitute invented accuracy values for those missing measurements.
+
+\section{Scope and Boundaries}
+ProjectGuard stores a submitted project title, abstract, team association, year, status, and related metadata. A checked upload is used to produce a score; the submission endpoint stores the title and abstract rather than the entire uploaded document. The current PostgreSQL application stores one 1024-dimensional embedding for each project summary. The checked title, description, and bounded document prefix provide query inputs to the checker.
+
+The completed system supports academic project management and human-guided similarity triage. It is not a plagiarism adjudication system, a general document repository, or a full research-paper search engine. In particular, the similarity score does not prove that a student copied another project. A mentor must examine the actual contributions and sources. The report covers the completed application, deployment architecture, and implemented method while separating future research improvements from delivered features.
+
+
+\section{Stakeholders and Use Cases}
+Students need to create or join a team, enter a proposal, check for potentially related work, and see a clear response. Mentors need to view students and projects, manage roster information, claim or reject relevant submissions, and record reviews. Administrators issue enrollment codes and manage account access. Each role has different authority and different information needs.
+
+A typical student path starts with an administrator-issued enrollment code, account linking through Clerk, team membership, a proposal check, and submission. A typical mentor path starts with role-specific access, roster review, project inspection, and a review decision. A typical administrator path creates or revokes a code and resolves account management issues. Separating these paths matters because a similarity result may contain other students' project details that should not be exposed through the student-facing response.
+
+\section{Organization of the Report}
+Chapter 2 surveys lexical and semantic retrieval. Chapter 3 describes the implemented system and deployment. Chapter 4 explains the data flow and hybrid scoring method. Chapter 5 presents the delivered functions and available evidence. Chapter 6 summarizes limitations and future improvements.
+
+\chapter{Literature Survey}
+\section{Lexical Information Retrieval}
+Term frequency--inverse document frequency is a conventional way to represent text as weighted terms. A term that appears repeatedly in one document receives weight, while a term common across the whole collection contributes less. Salton and Buckley describe term-weighting approaches for information retrieval \cite{salton1988}. In ProjectGuard, the query and stored abstracts are vectorized together. Their cosine similarity measures lexical overlap.
+
+This approach is useful when two project descriptions share distinctive technical language. It is less effective when the same idea is paraphrased, when the submitted text is very short, or when preprocessing removes meaningful symbols. A project about a particular algorithm may contain numbers or formula notation that the current lexical preprocessing discards. The lexical score should therefore be read as one view of the text rather than a complete test of conceptual similarity.
+
+\section{Dense Semantic Representations}
+Dense embeddings place text into vectors that can be compared with cosine similarity. Sentence-BERT is a well-known example of using sentence embeddings for semantic comparison \cite{reimers2019}. ProjectGuard does not use Sentence-BERT in its active PostgreSQL path. It calls the Qwen3 embedding model through Cloudflare Workers AI and stores the resulting 1024-dimensional project summary vector in PostgreSQL \cite{qwen3embedding,cloudflareqwen}.
+
+An embedding can rank related descriptions that share few exact words. It can also consider two proposals similar because they belong to the same broad topic even if their objectives or datasets are different. This makes the model suitable for candidate retrieval, provided that a person reads the returned project. The vector value is not a probability of misconduct. Its scale and ranking quality must be studied using project-specific examples.
+
+\section{Hybrid Retrieval}
+Combining lexical and semantic scores can balance two failure modes. Lexical matching catches exact distinctive phrases; semantic matching can retrieve paraphrased descriptions. A weighted sum is simple to implement and easy to explain, but it requires attention to scale, corpus composition, and the available labels. A score that is useful for ranking may still be unsuitable for a pass-or-block decision.
+
+ProjectGuard calculates a hybrid score for each stored project and reports the highest result. It also returns the top three matches internally. \begin{figure}[htbp]\centering
+\fbox{\parbox{0.8\textwidth}{\centering
+Title, description, optional upload\\[0.3em]$\downarrow$\\[0.3em]
+Validation and bounded extraction\\[0.3em]$\downarrow$\\[0.3em]
+TF--IDF and Qwen comparison\\[0.3em]$\downarrow$\\[0.3em]
+Internal ranking and role-specific response}}
+\caption{Similarity-checking data flow}\label{fig:checkflow}
+\end{figure}
+The current student endpoint deliberately narrows its response to the percentage, risk label, truncation information, and configured threshold. This differs from the internal result because project metadata about other students should not automatically be disclosed. The distinction between retrieval output and role-specific presentation is a system design concern as well as a ranking concern.
+
+
+\section{Academic Originality and Interpretation}
+Textual similarity is an observation about representations, not a conclusion about authorship or misconduct. Two students may independently choose a popular topic. Conversely, a small copied part may be hidden within an otherwise unrelated document. A useful academic process therefore treats the tool as triage: it identifies records to examine and leaves the decision to a qualified reviewer who can compare objectives, methods, citations, and timing.
+
+This distinction affects labels in the interface. The code uses terms such as plagiarism percentage and risk level, but the numerical value is a hybrid similarity score. The report uses that more precise description. The current labels low, medium, and high are heuristic display ranges. They should be tested for user interpretation and calibrated before they become academic policy. If a decision affects a student, the evidence and review path must be documented separately from the automated rank.
+
+\section{Research Gap}
+Existing information retrieval methods provide useful components, but a departmental mini project workflow also needs identity, teams, proposal ownership, mentor actions, and a review record. The completed ProjectGuard system brings those pieces together. Its contribution is integration and a transparent description of the current screening calculation, not a claim that its model is novel or that it improves accuracy over a published baseline.
+
+The main research gap is empirical. The repository has a calibration script and an example CSV schema, but no populated representative labeled set. Without that set, there is no measured precision, recall, specificity, or operating threshold. The system design can be reviewed from code, and workflow tests can check correctness, but retrieval quality requires a separate study with human labels. Chapter 5 defines how that study should be conducted.
+
+\chapter{Implemented and Deployed System}
+\section{Overall Architecture}
+The user interface consists of static HTML, CSS, and JavaScript pages. FastAPI serves the application endpoints. SQLAlchemy maps application records to PostgreSQL, and pgvector stores project embeddings. Clerk provides account credentials and sessions; the database stores linked academic profiles. External services provide embeddings and streaming chat responses. These parts communicate through the backend rather than exposing service credentials in the browser.
+
+\begin{figure}[htbp]
+\centering
+\fbox{\parbox{0.82\textwidth}{\centering
+Student and mentor browser interfaces\\[0.3em]
+$\downarrow$ authenticated requests\\[0.3em]
+FastAPI application\\[0.3em]
+$\swarrow\qquad\searrow$\\[0.3em]
+PostgreSQL with pgvector\qquad External embedding and chat services}}
+\caption{ProjectGuard architecture and trust boundary}
+\label{fig:architecture}
+\end{figure}
+The architecture separates identity, workflow data, and similarity computation. A request first establishes the authenticated role and profile. Workflow endpoints read or update teams, projects, rosters, and reviews. The checker validates an optional upload, extracts bounded text, computes similarities against stored records, and returns a role-appropriate response. This separation makes it possible to reason about access controls independently from the numerical ranking method.
+
+\section{Student Portal}
+The student portal supports account access, team creation, joining, invitation handling, project submission, a similarity check, and related team information. A student profile is linked to a Clerk user after an enrollment code is redeemed. The student identifier and year are then available to the workflow layer. The interface should show the active team and submission status rather than relying only on a local browser state.
+
+Submitting a project requires membership in a team with at least two students. The server checks these conditions and then runs a similarity check for the title and abstract before saving. This server-side check matters because browser controls are advisory and can be bypassed. If an originality block threshold is configured, the server rejects a score above it. With no configured threshold, the score is advisory and a valid submission can proceed.
+
+\section{Team Workflow}
+A student can create a team, join an eligible team, or respond to an invitation. Team records include a name, year, code, optional mentor name, description, GitHub URL, member limit, and creator reference. Membership records connect student roll numbers to a team. Invitation records carry inviter, invitee, status, and response time. These entities distinguish the persistent team from a one-time invitation or an individual browser session.
+
+\begin{table}[htbp]\centering\caption{Core team and project relationships}\label{tab:relationships}
+\begin{tabular}{p{0.29\textwidth}p{0.54\textwidth}}\hline
+Relationship & Meaning\\\hline
+Student to team member & A roll number participates in a team.\\
+Team to project & At most one project for a non-null team ID.\\
+Project to mentor & Optional assignment for review ownership.\\
+Project to student & Optional submitting student reference.\\\hline
+\end{tabular}\end{table}
+The project is attached to the team, and the database enforces a unique project per non-null team identifier. The submission path locks the team and project row while updating content. A later student edit changes the team project's title and abstract but is designed to preserve mentor ownership and selection data. This is important because a proposal can evolve after a mentor has begun reviewing it.
+
+
+\section{Mentor Portal}
+The mentor portal presents roster and project information for academic oversight. The code includes endpoints for roster import, student listing, project detail, mentor assignment, rejection, dashboard data, and review creation or status updates. A mentor review stores a group, review type, date, time, notes, status, and completion timestamp. These fields allow the application to represent a sequence of planned and completed review activities.
+
+Mentor access should be tied to the authenticated mentor profile. A roster entry has mentor and student identifiers, group name, project name, and year. Imported data may be incomplete or formatted inconsistently, so import processing must normalize and validate identifiers before creating rows. The report does not assume that every historical record was imported successfully; a deployment should audit roster counts and spot-check group associations.
+
+\section{Administrator Enrollment}
+New academic profiles require an enrollment code issued for a student or mentor. The code record stores a hash, role, intended identifier, expiry, creation and use timestamps, and revocation state. This supports a controlled link between an authenticated Clerk account and an academic profile. The administrator interface can list accounts, issue or revoke codes, and manage account deletion.
+
+The enrollment model matters because anyone who can create a generic identity should not automatically gain a student roll number or mentor role. The backend must verify the intended role and identifier during redemption. Operational handling is also important: codes should be delivered privately, expired when appropriate, and revoked if issued in error. This report describes the implemented role of the mechanism without claiming that a particular deployment has completed an independent security audit.
+
+\section{Project Submission Workflow}
+The submission endpoint accepts a title and abstract. It verifies the student role, finds the current team, checks for a minimum of two members, and runs the checker with the team's existing project excluded when resubmitting. It rejects an invalid score or a checker error. The optional server block threshold is read from the environment. If the score exceeds that configured value, the endpoint returns a validation error; otherwise it saves the team project.
+
+On PostgreSQL, saving a project obtains a Qwen embedding of the title and abstract and places it in the project row. If the external embedding call fails, the project should not be committed without the vector. This consistency rule prevents a newly saved record from later causing an incomplete index during checks. A reviewer should also note that only title and abstract are persisted by this endpoint, so any attached check document is not part of the stored comparison corpus.
+
+\section{Similarity Check Workflow}
+The check endpoint accepts a title, description, and optional file. It requires a student profile, reads a bounded upload, invokes the checker within a concurrency slot and deadline, and translates validation or extraction failures into API errors. The checker loads stored project summaries, computes lexical scores, obtains semantic similarities, combines them, and constructs a ranked result.
+
+The student-facing endpoint filters the internal result. It returns the displayed percentage, risk label, truncation indicators when relevant, and the configured submission threshold. Internal top-match metadata is not returned to the student from this route. This is a material detail for UI documentation: an internal top-three structure exists, but it is not the current student response. Any mentor review interface that needs candidate details should have a separately authorized route rather than reuse the student-facing payload.
+
+\section{Deployment Components}
+A local run uses Uvicorn for the FastAPI service and a static file server for the front end. PostgreSQL is required by the active application configuration; the live application does not fall back to SQLite. The database needs the pgvector extension. The embedding path needs Cloudflare account credentials, and the assistant needs its configured chat-service credential. These values belong in backend environment settings, not browser source.
+
+At startup, the application creates or migrates tables under a PostgreSQL advisory lock. This serializes schema updates if more than one API worker starts. An indexing utility can fill missing vectors for older projects. The frontend is served over HTTPS, and the FastAPI service uses a separate HTTPS origin. The frontend build injects the API origin; backend configuration supplies exact allowed origins, identity-provider settings, private service credentials, and database access. Production startup checks required configuration before serving requests.
+
+
+\section{Completed Deployment Workflow}
+The completed application is organized as a static frontend, a FastAPI backend, and a PostgreSQL database with pgvector. The frontend build uses \texttt{build\_frontend.py} to set the public API origin and generate the admin page content-security policy. Backend build steps install declared Python dependencies, prepare NLTK resources, check the environment, and import the application. Runtime configuration keeps Clerk, Groq, Cloudflare, database, and rate-limit secrets on the server rather than in browser assets.
+
+The deployment workflow connects the frontend and API through exact HTTPS origins. Clerk authenticates users, while the application links student and mentor profiles through administrator-issued enrollment codes. PostgreSQL stores the active teams, submissions, mentor records, and vectors. The API uses role checks for protected routes, validates documents before processing, and keeps the similarity score advisory unless a calibrated block threshold is explicitly configured. Deployment checks cover sign-in, team submission, mentor review, external model calls, and authorization boundaries.
+
+No hosting URL, deployment date, uptime percentage, or measured request latency is asserted here because those values have not been supplied for this document. The architecture and completed workflows are described without inventing operational metrics.
+
+\chapter{Design and Methodology}
+\section{Entity Design}
+The relational model includes students, mentors, teams, team members, invitations, projects, mentor roster rows, reviews, group messages, enrollment codes, and API rate-limit buckets. The project row links optionally to a team, submitting student, and assigned mentor. Optional references allow historical records to remain even if an account is removed. The model also records submission status and rejection metadata.
+
+The team and project entities are central to proposal ownership. A team can have multiple member rows, while a non-null team identifier has at most one project in the current schema. A project summary vector is stored in the same table as the title and abstract, so the text and embedding should be updated together. The data model and its key relationships are summarized in this chapter.
+
+
+\section{Document Validation}
+The extractor accepts PDF, DOCX, and UTF-8 TXT. It checks extensions and content signatures rather than trusting the browser-supplied media type. PDF validation looks for a PDF header near the start of the bytes. DOCX validation opens the ZIP container, checks required entries, and tests its integrity. TXT validation checks UTF-8 decoding. Empty files and mismatched extensions are rejected before scoring.
+
+Validation is important because a filename alone cannot tell the server how to parse content. After format checks, the extractor reports clear errors for protected or unreadable PDFs, broken DOCX files, empty documents, and invalid TXT encoding. Scanned PDFs with no selectable text currently need OCR and are not supported by this path. These are input-handling results, not similarity judgments; the interface should let the student correct the upload rather than display a false zero score.
+
+\section{Processing Limits}
+\begin{table}[htbp]\centering\caption{Current document processing bounds}\label{tab:limits}
+\begin{tabular}{p{0.55\textwidth}p{0.28\textwidth}}\hline
+Limit & Value\\\hline
+Upload bytes & 20 MiB\\
+Extracted characters & 10,000\\
+Extracted lines & 2,000\\
+Normalized document characters scored & 500\\
+Nominal embedding chunk size & 3,000 characters\\
+Chunk overlap & 200 characters\\\hline
+\end{tabular}\end{table}
+The API upload limit is 20 MiB. Extracted document text is limited to 10,000 characters and 2,000 lines, and the extractor stops when either bound is exceeded. After extraction, whitespace is normalized. Only the first 500 normalized characters are retained for document scoring; the checker records whether truncation occurred. Title and description are processed separately and are not replaced by that prefix.
+
+This limit bounds work on the current server, but it has a strong methodological consequence. A copied passage after the first 500 normalized characters of an uploaded document will not contribute to the current document score. A long-file check is therefore not a whole-document comparison. The report and interface must state this limitation plainly. Future work should study a bounded sampling or chunk retrieval strategy that covers the full accepted document without uncontrolled embedding cost.
+
+\section{Text Preprocessing}
+The lexical path concatenates the title, description, and retained document prefix. It lowercases the string, removes characters other than English letters and whitespace, removes English stopwords, and lemmatizes the remaining tokens. Stored abstracts undergo the same preprocessing. This consistency is necessary for a meaningful TF--IDF comparison, though it also removes some useful content.
+
+The representation loses numbers, formulas, programming symbols, and non-English words. For example, version numbers or model identifiers may be important in a technical proposal but disappear from the lexical text. Dense embeddings can preserve some of that information in the summary path, yet the hybrid score does not guarantee coverage. Evaluation should include examples where those tokens distinguish two projects and should compare this preprocessing with alternatives that preserve alphanumeric technical terms.
+
+\section{TF--IDF Construction}
+The checker fits a TF--IDF vectorizer to the cleaned query and all cleaned stored abstracts for the current check. It uses unigrams and bigrams with sublinear term frequency. The stored project title is not part of this lexical comparison. If $x$ is the query vector and $a_j$ is abstract vector $j$, the lexical score is
+\begin{equation}L_j=\frac{x\cdot a_j}{\|x\|_2\|a_j\|_2}.\end{equation}
+The query vocabulary and inverse document frequencies are rebuilt for every check, so a score can change when the corpus changes even if the submitted text does not.
+
+Rebuilding the vectorizer is simple and ensures the new query is represented, but it costs work proportional to the number and length of stored abstracts. A larger deployment may need a persistent lexical index with defined update rules. The deployed calculation is defined and reproducible; larger corpora may require a persistent lexical index and a separate scaling study.
+
+
+\section{Embedding Generation}
+For each stored project, the application embeds its title and abstract as one string. The Cloudflare client calls the configured Qwen3 model and returns 1024 finite numeric values. On a new submission, the embedding is created before the database transaction is committed. A separate indexer can fill null vectors for older rows. The checker expects vectors for all compared projects and raises an error if any are missing.
+
+The query side embeds the title-description summary and the retained document text when present. The client can batch multiple texts, while pgvector supplies cosine distance against stored vectors. Because the stored input is a short project summary, a query passage can only match information represented in that summary. A reviewer should not interpret a low score as proof that two full project reports have no overlap.
+
+\section{Chunking}
+The chunking utility has a maximum chunk size of 3000 characters, an intended overlap of 200 characters, and a cap of 32 chunks per call. It prefers a sentence boundary and then a word boundary near a split. The checked title and description are chunked separately from the extracted document prefix. With the present 500-character scoring prefix, a typical document contributes only one chunk; the broader chunking design mainly matters if that prefix limit changes.
+
+For a stored project $j$, the semantic score is the highest bounded cosine similarity across query inputs:
+\begin{equation}S_j=\max_k\left[\operatorname{clip}_{[0,1]}
+\left(\frac{e(q_k)\cdot e(p_j)}{\|e(q_k)\|_2\|e(p_j)\|_2}\right)\right].\end{equation}
+Taking a maximum helps find a relevant passage but introduces a length effect when many chunks are allowed. That effect should be measured before expanding document coverage.
+
+\section{Hybrid Score}
+The active PostgreSQL path combines lexical and semantic scores as
+\begin{equation}H_j=0.60L_j+0.40S_j,\qquad H=100\max_j H_j.\end{equation}
+The percentage displayed by the deployed system is the largest weighted similarity among stored projects. It is not an estimated probability of plagiarism. Internally, the checker sorts all project scores and prepares the three highest matches with component values and project metadata.
+
+The weight constants are fixed in code. Since their underlying score distributions may differ, a 60/40 arithmetic split does not necessarily mean lexical evidence has exactly 60 percent of the practical influence. A labeled study should inspect score distributions and compare alternative weights. It should also test whether showing components improves reviewer understanding compared with showing only the combined score.
+
+\section{Risk Labels and Submission Rule}
+The checker labels a score below 25 as low, from 25 to below 55 as medium, and at least 55 as high. These labels are display heuristics, not validated categories. The frontend reads a server-returned submission threshold. The backend reads an optional \texttt{ORIGINALITY\_BLOCK\_THRESHOLD} value from the environment. When it is unset, there is no hard score block. When set, the submission endpoint rejects a score above the configured value.
+
+The hard block is configurable and is applied by the server when enabled. A fixed 30 percent cutoff should not be described as the current policy. Any deployed threshold should be approved after calibration, documented with dates and evaluation data, and reviewed when the project corpus changes.
+
+\section{Error Handling}
+The checker can fail because an upload is invalid, no useful text remains after preprocessing, no projects exist, a stored project lacks an embedding, an external request fails, or a database operation fails. These cases should be distinguished from a valid low similarity score. The API maps document validation and extraction errors to client responses, enforces an upload size limit, and uses a deadline and concurrency slot around the expensive check.
+
+The submission endpoint also validates that the returned score is numeric, finite, and within zero to one hundred before saving. A temporary checking failure therefore does not silently produce a successful project submission. This fail-closed behavior protects the integrity of the workflow, although it can prevent submissions while external services are unavailable. Operational guidance should include a staff procedure for service outages rather than telling students to retry indefinitely.
+
+
+\section{Access Control}
+The backend distinguishes student, mentor, and administrator operations by authenticated profile. Clerk maintains login credentials and sessions; the academic database stores linked profiles and role-specific records. The student similarity route filters internal match details from the response, so the displayed score does not automatically reveal another team's project title. Mentor and administrator routes have different authorization requirements.
+
+These controls are as important as the checker algorithm because the system contains academic records. A request must not trust a client-provided roll number or role without checking the session and linked profile. Team ownership and mentor assignment must also be checked when editing or viewing a project. The repository contains targeted session and project visibility tests, but this report does not claim a complete external security certification.
+
+\chapter{Results and Discussion}
+\section{Completed Project Deliverables}
+The project deliverables comprise the student, mentor, and administrator interfaces; Clerk-backed profile linking and enrollment; team and invitation workflows; project submission with mentor assignment; roster and review operations; PostgreSQL persistence with pgvector; PDF, DOCX, and TXT extraction; hybrid TF--IDF and Qwen similarity; and backend integration with the streaming assistant. The frontend build and backend startup paths support the deployed architecture. The implementation also includes server-side authentication checks, controlled upload handling, and a role-filtered student response.
+
+Completion of these application features is distinct from statistical validation of similarity decisions. The system runs the defined workflow, while the absence of a representative labeled benchmark prevents a numeric claim of detection accuracy. The reported score remains a review aid. This distinction allows the report to describe the project as completed and deployed without presenting an unsupported precision, recall, or plagiarism-detection percentage.
+
+
+\section{Available Numeric Evidence}
+\begin{table}[htbp]\centering\caption{Evidence available and still required}\label{tab:evidence}
+\begin{tabular}{p{0.39\textwidth}p{0.44\textwidth}}\hline
+Available & Still required\\\hline
+Implemented scoring path & Representative labeled benchmark\\
+Two manual embedding examples & Held-out precision and recall\\
+Calibration script and empty CSV schema & Threshold selection and uncertainty\\
+Workflow tests in repository & End-to-end performance study\\\hline
+\end{tabular}\end{table}
+The repository includes a manual embedding comparison reported in its embedding documentation. One related sample pair produced a cosine value of 0.8246 and one unrelated pair produced 0.4234 on 29 September 2026. Those numbers describe three illustrative texts and the embedding component only. They do not evaluate the hybrid score, the document parser, or the current student workflow.
+
+The supplied labeled cases CSV has a header but no representative observations. The calibration script is a tool for future analysis; its existence does not supply precision or recall. A report should not compute accuracy from an empty file or claim that the two manual examples validate a threshold. The correct present result is that retrieval behavior is implemented and evaluation data remain to be collected.
+
+\section{Functional Verification Matrix}
+Functional tests should check each user path independently. For identity, verify that a valid enrollment code links the intended role and that an expired, revoked, or reused code is rejected. For teams, check creation, joining, invitations, member limits, and resubmission by a team member. For mentors, check roster import, project visibility, assignment, rejection, and review status changes.
+
+For the checker, submit valid PDF, DOCX, and TXT examples as well as an empty file, a renamed invalid file, a protected PDF, and a file above the size limit. Verify that a response contains the expected score fields without exposing internal match details to a student. These are proposed or repository-testable cases; they are not presented as a completed measurement set. A repeatable test record should include the case, inputs, expected result, actual result, and evidence.
+
+\section{Discussion of Current Limits}
+The largest method limit is that uploaded document scoring uses only the first 500 normalized characters, even though the extractor may accept much more text. The stored representation is also only a title and abstract. This asymmetry can miss detailed overlap that appears later in a report and may overemphasize broad introductory language. The lexical path removes digits and non-English characters, while the semantic path depends on an external model.
+
+The workflow limit is that a similarity score can be mistaken for a disciplinary conclusion. The system should provide a review path, clear explanations, and an appeal process before any hard block is enabled. The completed implementation supports the delivered workflow and targeted correctness tests. It cannot yet support an empirical claim that it detects plagiarism at a particular accuracy.
+
+\chapter{Conclusion and Future Scope}
+\section{Summary}
+ProjectGuard combines academic project records, student teams, mentor workflows, and a hybrid similarity screen. The implementation uses FastAPI and PostgreSQL for workflow data, pgvector for stored embeddings, TF--IDF for lexical comparison, and Cloudflare Qwen embeddings for semantic comparison. The checker returns a weighted ranking internally and a narrower advisory response to students.
+
+The report documents both the implemented behavior and its practical limits. In particular, the current scoring prefix, absence of labeled evaluation data, and provisional risk labels constrain interpretation. The deployed system routes attention to potentially related records as an advisory aid. A human reviewer remains responsible for understanding whether projects actually overlap and whether an academic concern exists.
+
+
+\section{Future Document Coverage}
+A future checker should cover the full accepted document instead of only its first 500 normalized characters. One approach is to divide the text into bounded passages, embed each passage, and retrieve candidate records before performing more detailed comparison. Another is to select passages from the title, abstract, methods, and conclusion rather than always taking a prefix. Both approaches introduce additional cost and a possible length bias.
+
+Any change should preserve input limits and clear truncation reporting. The evaluation should compare old and new coverage on cases where relevant overlap appears near the beginning, middle, and end of the document. It should also measure latency and service failures. The goal is better coverage with a known cost and error profile, not simply a larger number of embedding requests.
+
+\section{Final Conclusion}
+The completed deployment integrates proposal management and similarity retrieval in one academic application. Its calculations are explainable at the component level, and its current architecture makes the main dependencies visible. At the same time, a score is only a ranking signal. The current evidence does not justify a detection-accuracy claim or a universal cutoff.
+
+A responsible next iteration should first collect representative labels, broaden document coverage, measure performance, and design a mentor review process. Those results can then support a justified threshold and clearer student communication. ProjectGuard is presented as a deployed project management system with human-guided similarity screening; further research can improve coverage and calibration.
+
+\begin{thebibliography}{00}
+\addcontentsline{toc}{chapter}{References}
+\bibitem{salton1988} G. Salton and C. Buckley, Term-weighting approaches in automatic text retrieval, \emph{Information Processing \& Management}, vol. 24, no. 5, pp. 513--523, 1988.
+\bibitem{reimers2019} N. Reimers and I. Gurevych, Sentence-BERT: Sentence embeddings using Siamese BERT-networks, in \emph{Proc. EMNLP-IJCNLP}, 2019, pp. 3982--3992.
+\bibitem{qwen3embedding} Y. Zhang \emph{et al.}, Qwen3 Embedding: Advancing text embedding and reranking through foundation models, 2025. \url{https://arxiv.org/abs/2506.05176}
+\bibitem{cloudflareqwen} Cloudflare, qwen3-embedding-0.6b (Qwen), Workers AI documentation. \url{https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/}
+\bibitem{pgvector} pgvector contributors, pgvector: Open-source vector similarity search for Postgres. \url{https://github.com/pgvector/pgvector}
+\end{thebibliography}
+\end{document}
