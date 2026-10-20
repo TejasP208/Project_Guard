@@ -75,18 +75,18 @@ class ProjectProgressTests(unittest.TestCase):
         self.assertEqual(team["project_abstract"], "Identify plants")
         self.assertEqual({member["roll_no"] for member in team["member_details"]}, {"S1", "S2"})
 
-    def test_check_required_inputs_and_fifty_percent_boundary(self):
+    def test_check_required_inputs_and_thirty_percent_boundary(self):
         files = {"file": ("idea.txt", b"Detailed project idea", "text/plain")}
         self.assertEqual(self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": " "}, files=files).status_code, 422)
         self.assertEqual(self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}).status_code, 422)
         self.assertEqual(self.call("POST", "/submit-project-with-file",
                                    data={"project_name": "Idea", "project_abstract": "Abstract"}, files=files).status_code, 422)
-        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 50}
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 30}
         at_limit = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
         self.assertEqual(at_limit.status_code, 200)
         self.assertTrue(at_limit.json()["can_submit"])
         self.assertIn("check_token", at_limit.json())
-        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 50.01}
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 30.01}
         above_limit = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
         self.assertFalse(above_limit.json()["can_submit"])
         self.assertNotIn("check_token", above_limit.json())

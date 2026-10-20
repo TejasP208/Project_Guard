@@ -84,8 +84,8 @@ _last_rate_cleanup = 0
 
 
 def _originality_block_threshold() -> float:
-    """The submission policy accepts similarity scores up to and including 50%."""
-    return 50.0
+    """The submission policy accepts similarity scores up to and including 30%."""
+    return 30.0
 
 
 @asynccontextmanager

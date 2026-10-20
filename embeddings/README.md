@@ -44,14 +44,14 @@ Cloudflare request and returns one vector for each input in order.
 
 The combined TF-IDF/Qwen score (60%/40%) is provisional. Project submission
 currently requires an abstract, document, and prior similarity check of the
-same content. The submission limit is 50%; scores above 50% are
+same content. The submission limit is 30%; scores above 30% are
 blocked. The percentage estimates similarity to stored projects and is not
 proof of plagiarism. To evaluate the cutoff, collect representative labeled cases and run
 `python -m embeddings.calibrate path/to/labeled_cases.csv`; it requires at
 least 10 similar and 10 unrelated examples and evaluates the current configured
 weights and candidate cutoffs. Treat that result as exploratory, review errors
 on separate held-out cases, and document the chosen weights and cutoff before
-changing the 50% submission policy. The script does not optimize weights, so the weights and cutoff
+changing the 30% submission policy. The script does not optimize weights, so the weights and cutoff
 still need separate evidence and review.
 
 To try it manually after adding the two values to `.env`:

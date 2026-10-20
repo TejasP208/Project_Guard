@@ -258,7 +258,7 @@ class ProjectVisibilityTests(unittest.TestCase):
         response = self.client.post("/submit-project", headers=self.headers("student:S1"),
                                     json={"project_name": "Copied idea", "project_abstract": "Copied abstract"})
         self.assertEqual(response.status_code, 422)
-        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 51})):
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 31})):
             checked = self.client.post("/check-plagiarism", headers=self.headers("student:S1"),
                                        data={"title": "Copied idea", "description": "Copied abstract"},
                                        files={"file": ("idea.txt", b"Copied project details", "text/plain")})
@@ -325,7 +325,7 @@ class ProjectVisibilityTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual({key: response.json()[key] for key in ("plagiarism_percent", "risk_level", "document_text_truncated", "submission_block_threshold", "can_submit")},
                              {"plagiarism_percent": 12, "risk_level": "Low", "document_text_truncated": True,
-                              "submission_block_threshold": 50, "can_submit": True})
+                              "submission_block_threshold": 30, "can_submit": True})
             self.assertIn("check_token", response.json())
             self.assertEqual(self.client.post("/check-plagiarism", headers=self.headers(),
                                               data={"title": "Idea", "description": "Abstract"},

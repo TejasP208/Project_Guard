@@ -66,7 +66,7 @@ def load_training_projects(exclude_project_id: int | None = None) -> list[Traini
 
 def determine_risk(score: float) -> str:
     if score < 25:   return "Low"
-    elif score <= 50: return "Medium"
+    elif score <= 30: return "Medium"
     else:            return "High"
 
 

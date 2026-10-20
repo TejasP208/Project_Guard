@@ -310,7 +310,7 @@ sequenceDiagram
   3. A subprocess worker (`nlp/plagiarism_worker.py`) is spawned to isolate CPU work; killed after 90-second timeout.
   4. The project's embedding (Cloudflare Qwen3, 1024-dim) is compared against all existing project embeddings in PostgreSQL via cosine similarity.
   5. An `originality_score` (0–100 %) is returned and displayed as a color-coded chip.
-- **Hard-block threshold:** Scores above 50% are blocked by default. The prior check is tied to the submitted title, abstract, and document.
+- **Hard-block threshold:** Scores above 30% are blocked. The prior check is tied to the submitted title, abstract, and document.
 - **Concurrency guard:** A PostgreSQL advisory lock ensures only one check runs at a time across all workers.
 
 ### 7.2 Axiom AI — Student Chatbot (`/chat-stream`)
