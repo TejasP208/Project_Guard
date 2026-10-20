@@ -163,3 +163,29 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         return extract_from_docx(file_bytes)
     elif extension == '.txt':
         return extract_from_txt(file_bytes)
+
+
+def extract_project_document(file_bytes: bytes, filename: str) -> str:
+    """Retain substantially more text than the plagiarism preview for later retrieval."""
+    extension = validate_document(file_bytes, filename)
+    try:
+        if extension == '.pdf':
+            with fitz.open(stream=file_bytes, filetype='pdf') as document:
+                if document.is_encrypted:
+                    raise DocumentExtractionError('Upload an unlocked PDF.')
+                result = '\n'.join(page.get_text() for page in document)
+        elif extension == '.docx':
+            document = Document(io.BytesIO(file_bytes))
+            result = '\n'.join(paragraph.text for paragraph in document.paragraphs)
+        else:
+            result = file_bytes.decode('utf-8')
+    except DocumentExtractionError:
+        raise
+    except Exception as error:
+        raise DocumentExtractionError('This document could not be read.') from error
+    result = result.strip()
+    if not result:
+        raise DocumentExtractionError('No selectable text was found in this document.')
+    if len(result) > 2_000_000:
+        raise DocumentLimitError('This document has too much extracted text (2 million character limit).')
+    return result

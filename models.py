@@ -1,5 +1,5 @@
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text, LargeBinary, UniqueConstraint, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -103,6 +103,7 @@ class MentorReview(Base):
     mentor_name: Mapped[str] = mapped_column(String, nullable=False)
     mentor_key: Mapped[str] = mapped_column(String, index=True, nullable=False)
     group_name: Mapped[str] = mapped_column(String, nullable=False)
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
     review_type: Mapped[str] = mapped_column(String, nullable=False)
     review_date: Mapped[str] = mapped_column(String, nullable=False)
     review_time: Mapped[str] = mapped_column(String, nullable=False)
@@ -121,6 +122,9 @@ class Team(Base):
     year: Mapped[str | None] = mapped_column(String, nullable=True)
     department: Mapped[str | None] = mapped_column(String, nullable=True, default="aiml")
     project_abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review1_status: Mapped[str] = mapped_column(String(16), nullable=False, default="not_submitted", server_default="not_submitted")
+    review2_status: Mapped[str] = mapped_column(String(16), nullable=False, default="not_submitted", server_default="not_submitted")
+    review3_status: Mapped[str] = mapped_column(String(16), nullable=False, default="not_submitted", server_default="not_submitted")
     mentor_name: Mapped[str | None] = mapped_column(String, nullable=True)
     team_code: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     sheet_group_no: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
@@ -138,6 +142,51 @@ class TeamMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     team_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     roll_no: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ProjectDocument(Base):
+    __tablename__ = "project_documents"
+    __table_args__ = (UniqueConstraint("team_id", "slot", name="uq_project_documents_team_slot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot: Mapped[str] = mapped_column(String(32), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    uploaded_at: Mapped[str] = mapped_column(String, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    index_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    index_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class ProjectDocumentChunk(Base):
+    __tablename__ = "project_document_chunks"
+    __table_args__ = (UniqueConstraint("document_id", "chunk_number", name="uq_document_chunk_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("project_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot: Mapped[str] = mapped_column(String(32), nullable=False)
+    chunk_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(VECTOR(1024), nullable=False)
+
+
+class TopicChangeRequest(Base):
+    __tablename__ = "topic_change_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposed_title: Mapped[str] = mapped_column(String(200), nullable=False)
+    proposed_abstract: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    decided_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class TeamInvitation(Base):

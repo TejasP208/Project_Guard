@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons for modern, clean icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="style.css?v=account-actions-2">
+    <link rel="stylesheet" href="style.css?v=github-card-ui-1">
     <link rel="stylesheet" href="group_connect.css">
     <link rel="stylesheet" href="feedback.css">
     <script src="feedback.js?v=accessible-feedback-1" defer></script>
@@ -42,8 +42,8 @@
                     <span>Submit Project</span>
                 </a>
                 <a href="#" class="nav-item" id="nav-find">
-                    <i class="ph ph-atom"></i>
-                    <span>Ask Axiom</span>
+                    <i class="ph ph-folder-open"></i>
+                    <span>My Project</span>
                 </a>
                 <a href="#" class="nav-item" id="nav-team">
                     <i class="ph ph-users"></i>
@@ -93,66 +93,90 @@
 
                 <div class="dashboard-grid">
                     <!-- Progress Card -->
-                    <div class="card glass-card progress-overview">
+                    <div class="card glass-card progress-overview student-progress-card">
                         <h3>Project Progress</h3>
+                        <p class="student-card-intro">Your team's completed checkpoints</p>
                         <div class="main-progress">
-                            <span class="percentage">46%</span>
+                            <span class="percentage" id="student-progress-percent">0%</span>
                             <div class="progress-bar-wrapper">
-                                <div class="progress-bar" style="width: 46%"></div>
+                                <div class="progress-bar" id="student-progress-bar" style="width: 0%"></div>
                             </div>
                         </div>
-                        <ul class="milestones">
-                            <li class="completed"><i class="ph-fill ph-check-circle"></i> Review-1</li>
-                            <li class="completed"><i class="ph-fill ph-check-circle"></i> Review-2</li>
-                            <li class="active"><i class="ph-fill ph-spinner-gap"></i> Review-3</li>
-                            <li class="pending"><i class="ph ph-circle"></i> Review-4</li>
-                            <li class="pending"><i class="ph ph-circle"></i>Final Submission</li>
+                        <ul class="milestones" id="student-progress-milestones">
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Project idea</li>
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Review 1</li>
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Review 2</li>
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Review 3</li>
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Research paper</li>
+                            <li class="pending"><i class="ph ph-circle" aria-hidden="true"></i> Project report</li>
                         </ul>
+                    </div>
+                    <div class="card glass-card student-progress-card student-repository-card">
+                        <div class="student-repository-heading">
+                            <span class="student-repository-icon"><i class="ph ph-github-logo" aria-hidden="true"></i></span>
+                            <div><h3>GitHub repository</h3><p>Share your team's code in one place.</p></div>
+                        </div>
+                        <div class="student-repository-current" id="student-repository-current" aria-live="polite">
+                            <span id="student-repository-empty">No repository linked yet</span>
+                            <a id="student-project-github" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
+                        </div>
+                        <form id="student-dashboard-github-form" class="student-inline-form">
+                            <label for="student-dashboard-github">Repository URL</label>
+                            <div class="student-repository-controls">
+                                <input id="student-dashboard-github" type="url" inputmode="url" placeholder="https://github.com/owner/repository" autocomplete="url">
+                                <button class="btn btn-primary" type="submit">Save link</button>
+                            </div>
+                        </form>
+                        <p id="student-repository-status" class="student-repository-status" role="status"></p>
                     </div>
 
                 </div>
             </div>
 
-            <!-- Find Your Project View (Axiom AI Search) -->
+            <!-- Current team's project -->
             <div id="view-find" class="content-view hidden">
                 <header class="top-header">
                     <div>
-                        <h1 class="page-title">Find your Project</h1>
-                        <p class="page-subtitle">Use Axiom AI to locate and analyze your past submissions</p>
+                        <h1 class="page-title">My Project</h1>
+                        <p class="page-subtitle">Your team's current project and assigned reviews</p>
                     </div>
                     <button class="icon-btn glass-btn notification-btn">
                         <i class="ph ph-bell"></i>
                         <span class="notification-badge"></span>
                     </button>
                 </header>
-                <div class="ai-search-container glass-card ai-glow-card">
-                    <div class="ai-branding ai-pulse-branding">
-                        <div class="ai-logo-wrapper">
-                            <div class="premium-ai-orb">
-                                <i class="ph-fill ph-terminal-window"></i>
-                            </div>
-                            <div class="glow-ring"></div>
-                            <div class="glow-ring ring-2"></div>
-                        </div>
-                        <h2>Axiom AI Search</h2>
-                        <p>Intelligent semantic search for your knowledge base</p>
-                    </div>
-                    <div id="find-chat-box" class="chatbot-messages expanded-chat">
-                        <div class="message-wrapper ai-wrapper">
-                            <div class="message-avatar"><i class="ph-fill ph-terminal-window"></i></div>
-                            <div class="ai-message premium-glass-bubble">
-                                <p>I'm Axiom, ready to search your project . What do you need?</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="ai-chat-box premium-input-container">
-                        <div class="input-wrapper glowing-input">
-                            <i class="ph ph-terminal-window ai-sparkle-icon"></i>
-                            <input type="text" id="find-chat-input" placeholder="e.g., Help me find my Project...">
-                            <button id="find-send-btn" class="btn btn-primary premium-send-btn chat-send"><i
-                                    class="ph-bold ph-arrow-right"></i></button>
-                        </div>
-                    </div>
+                <div class="card glass-card student-project-card">
+                    <p id="student-project-summary" class="student-project-summary" role="status">Loading your team project…</p>
+                    <h2 id="student-project-title">Project not yet selected</h2>
+                    <dl class="student-project-facts">
+                        <div><dt>Team</dt><dd id="student-project-team">—</dd></div>
+                        <div><dt>Group</dt><dd id="student-project-group">—</dd></div>
+                        <div><dt>Mentor</dt><dd id="student-project-mentor">Not assigned</dd></div>
+                        <div><dt>Status</dt><dd id="student-project-status">Not submitted</dd></div>
+                    </dl>
+                    <section class="student-project-section"><h3>Team members</h3><p id="student-project-members">—</p></section>
+                    <section class="student-project-section"><h3>Project abstract</h3><p id="student-project-abstract">No abstract submitted yet.</p></section>
+                    <section class="student-project-section" id="student-review-action" hidden>
+                        <h3 id="student-review-title">Review document</h3>
+                        <p id="student-review-description"></p>
+                        <form id="student-progress-upload-form" class="student-upload-form">
+                            <input id="student-progress-slot" type="hidden">
+                            <label for="student-progress-file">PDF, DOCX, or TXT · Up to 20 MB</label>
+                            <input id="student-progress-file" type="file" accept=".pdf,.docx,.txt" required>
+                            <button class="btn btn-primary" id="student-review-submit" type="submit">Submit review</button>
+                        </form>
+                    </section>
+                    <p id="student-progress-upload-status" role="status"></p>
+                    <details id="student-topic-change-section" hidden>
+                        <summary>Ask mentor to change project topic</summary>
+                        <form id="student-topic-change-form">
+                            <input id="student-new-title" placeholder="Proposed project title" maxlength="200" required>
+                            <textarea id="student-new-abstract" placeholder="Proposed abstract" maxlength="10000"></textarea>
+                            <textarea id="student-change-reason" placeholder="Why should the topic change?" maxlength="2000" required></textarea>
+                            <button class="btn btn-primary" type="submit">Send request</button>
+                        </form>
+                    </details>
+                    <p id="student-topic-change-status" role="status"></p>
                 </div>
             </div>
 
@@ -312,10 +336,6 @@
                                 <label for="team-max">Max Members</label>
                                 <input type="number" id="team-max" value="4" min="2" max="10">
                             </div>
-                            <div class="form-group">
-                                <label for="team-github">GitHub repository (optional)</label>
-                                <input type="url" id="team-github" placeholder="https://github.com/owner/repository">
-                            </div>
                             <div class="form-actions">
                                 <button type="button" class="btn btn-secondary" id="cancel-create-team">Cancel</button>
                                 <button type="submit" class="btn btn-primary">
@@ -359,14 +379,6 @@
 
                 <!-- Team Roster Card (shown after joining/creating) -->
                 <div id="team-roster-card" class="card glass-card team-roster hidden">
-                    <form id="team-github-form" class="team-form" style="margin: 0 0 1rem;">
-                        <label for="roster-github-url">GitHub repository</label>
-                        <div class="form-actions">
-                            <input type="url" id="roster-github-url" placeholder="https://github.com/owner/repository" style="flex: 1;">
-                            <button type="submit" class="btn btn-secondary">Save link</button>
-                        </div>
-                        <span id="team-github-status" role="status" aria-live="polite"></span>
-                    </form>
                     <div class="roster-top-bar">
                         <div class="roster-team-label" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
@@ -392,6 +404,13 @@
                             </div>
                         </div>
                     </div>
+                    <dl class="student-project-facts team-current-facts">
+                        <div><dt>Group</dt><dd id="roster-group-number">—</dd></div>
+                        <div><dt>Year / department</dt><dd id="roster-year-department">—</dd></div>
+                        <div><dt>Mentor</dt><dd id="roster-mentor-name">Not assigned</dd></div>
+                        <div><dt>Project</dt><dd id="roster-project-name">Not yet selected</dd></div>
+                    </dl>
+                    <p class="team-project-abstract" id="roster-project-abstract">No project abstract submitted yet.</p>
                     <div class="roster-members" id="roster-members">
                         <div class="member-slot filled leader">
                             <div class="member-avatar">
@@ -602,7 +621,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=project-review-status-1"></script>
+    <script src="script.js?v=github-card-ui-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
     <script src="group_connect.js?v=project-visibility-1"></script>
 </body>
