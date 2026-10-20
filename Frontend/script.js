@@ -341,6 +341,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // File state
     let currentFile = null;
+    const submissionForm = document.getElementById('submission-form');
+    function invalidateSimilarityCheck() {
+        delete submissionForm.dataset.checkToken;
+        btnSubmit.disabled = true;
+        if (evalPanel.style.display !== 'none') resetEvalState();
+    }
+    document.getElementById('project-title').addEventListener('input', invalidateSimilarityCheck);
+    document.getElementById('project-desc').addEventListener('input', invalidateSimilarityCheck);
     const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
     const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'txt']);
 
@@ -385,8 +393,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function handleFiles(files) {
         if (files.length > 0) {
+            invalidateSimilarityCheck();
             const file = files[0];
             currentFile = null;
+            submissionForm._selectedFile = null;
             const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
             if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
                 showUploadError('Unsupported file type. Choose a PDF, DOCX, or TXT file.');
@@ -400,6 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             uploadStatusText.style.color = 'var(--text-muted)';
             currentFile = file;
+            submissionForm._selectedFile = file;
             startUploadSimulation(currentFile.name);
         }
     }
@@ -443,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         progressBar.style.background = 'var(--status-verified)';
 
         // Enable buttons
-        btnSubmit.disabled = false;
+        btnSubmit.disabled = true;
         btnCheck.disabled = false;
     }
 
@@ -465,22 +476,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Remove File Logic --- //
     removeFileBtn.addEventListener('click', () => {
+        invalidateSimilarityCheck();
         currentFile = null;
+        submissionForm._selectedFile = null;
         fileInput.value = '';
         clearUploadError();
         dropZone.style.display = 'block';
         uploadProgressArea.style.display = 'none';
         evalPanel.style.display = 'none';
 
-        btnSubmit.disabled = false;
+        btnSubmit.disabled = true;
         btnCheck.disabled = false;
         progressBar.style.background = 'linear-gradient(90deg, var(--primary), var(--secondary))';
         uploadStatusText.style.color = 'var(--text-muted)';
     });
 
 
-    // --- Anti-Gravity Checking Simulation --- //
+    // --- Similarity checking --- //
     btnCheck.addEventListener('click', async () => {
+        const title = document.getElementById('project-title').value.trim();
+        const desc = document.getElementById('project-desc').value.trim();
+        if (!title || !desc || !currentFile) {
+            showUploadError('Enter a project title and abstract, then attach a document before checking similarity.');
+            return;
+        }
+        const checkedFile = currentFile;
+        invalidateSimilarityCheck();
         // Ui State Updates
         btnCheck.disabled = true;
         btnCheck.innerHTML = '<i class="ph-fill ph-spinner-gap ph-spin"></i> Checking...';
@@ -491,13 +512,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         evalPanel.style.display = 'block';
         clearUploadError();
 
-        const title = document.getElementById("project-title").value.trim();
-        const desc = document.getElementById("project-desc") ? document.getElementById("project-desc").value.trim() : "";
-
         const formData = new FormData();
         formData.append("title", title);
         formData.append("description", desc);
-        if (currentFile) formData.append("file", currentFile);
+        formData.append("file", checkedFile);
 
         try {
             const response = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/check-plagiarism`, {
@@ -507,9 +525,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             
             if (response.ok) {
+                if (currentFile !== checkedFile || document.getElementById('project-title').value.trim() !== title || document.getElementById('project-desc').value.trim() !== desc) {
+                    resetEvalState();
+                    showUploadError('Project details changed during the check. Check similarity again.');
+                    return;
+                }
                 finishChecking(data);
                 if (data.document_text_truncated) {
-                    showUploadError('The document is within the upload limits, but only its first 500 extracted characters were checked.');
+                    showUploadError('The document was shortened for scoring. Review it and check again.');
                 }
             } else {
                 showUploadError(data.detail || "The document could not be checked. Review the file and try again.");
@@ -531,6 +554,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function finishChecking(data) {
+        btnCheck.disabled = false;
         btnCheck.innerHTML = '<i class="ph-fill ph-check-circle"></i> Checked';
 
         chipChecking.style.display = 'none';
@@ -565,15 +589,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         scoreContainer.style.animation = 'fadeIn 0.5s ease forwards';
 
         const threshold = data.submission_block_threshold;
-        if (typeof threshold === 'number' && data.plagiarism_percent > threshold) {
+        if (!data.can_submit || !data.check_token) {
             btnSubmit.disabled = true;
-            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the configured ${threshold}% submission limit. Revise the project before submitting.`);
+            showUploadError(`Similarity score ${data.plagiarism_percent}% exceeds the ${threshold}% submission limit. Revise the project and check again.`);
         } else {
+            submissionForm.dataset.checkToken = data.check_token;
             btnSubmit.disabled = false;
-            if (typeof threshold !== 'number') {
-                uploadError?.classList.add('advisory');
-                showUploadError('This similarity score is advisory. No calibrated submission-block threshold is configured yet.');
-            }
         }
     }
 
@@ -582,6 +603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chipChecking.style.display = 'none';
         chipVerified.style.display = 'none';
         scoreContainer.style.display = 'none';
+        btnCheck.disabled = false;
 
         btnCheck.innerHTML = '<i class="ph-fill ph-shield-check"></i> Check  Plagiarism';
     }
@@ -1000,6 +1022,27 @@ async function submitProject() {
         titleEl.focus();
         return;
     }
+    if (!descEl.value.trim()) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Please fill in the Project Abstract.';
+        errorPanel.hidden = false;
+        descEl.focus();
+        return;
+    }
+    const selectedFile = document.getElementById('submission-form')._selectedFile;
+    if (!selectedFile) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Please attach a project document.';
+        errorPanel.hidden = false;
+        return;
+    }
+    const checkToken = document.getElementById('submission-form').dataset.checkToken;
+    if (!checkToken) {
+        const errorPanel = document.getElementById('upload-error');
+        errorPanel.textContent = 'Check similarity before submitting.';
+        errorPanel.hidden = false;
+        return;
+    }
 
     const data = {
         project_name: titleEl.value.trim(),
@@ -1008,14 +1051,14 @@ async function submitProject() {
 
     const btnSubmit = document.getElementById("btn-submit");
     btnSubmit.disabled = true;
-    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Checking and submitting...';
+    btnSubmit.innerHTML = '<i class="ph ph-spinner-gap"></i> Submitting...';
 
     try {
         const payload = new FormData();
         payload.append('project_name', data.project_name);
         payload.append('project_abstract', data.project_abstract);
-        const selectedFile = document.getElementById('file-input')?.files?.[0];
-        if (selectedFile) payload.append('file', selectedFile);
+        payload.append('file', selectedFile);
+        payload.append('check_token', checkToken);
         const res = await window.projectGuardApiFetch(`${window.projectGuardApiBaseUrl}/submit-project-with-file`, {
             method: "POST", body: payload
         });
@@ -1026,6 +1069,7 @@ async function submitProject() {
         }
 
         const result = await res.json();
+        delete document.getElementById('submission-form').dataset.checkToken;
         window.projectGuardFeedback.notify(result.message || 'Project submitted successfully.', 'success');
         const reviewStatus = document.getElementById('project-review-status');
         if (reviewStatus) {
@@ -1042,7 +1086,8 @@ async function submitProject() {
             errorPanel.textContent = `Submission failed: ${err.message}`;
             errorPanel.hidden = false;
         }
-        btnSubmit.disabled = /^Submission blocked:/.test(err.message);
+        delete document.getElementById('submission-form').dataset.checkToken;
+        btnSubmit.disabled = true;
         btnSubmit.innerHTML = '<i class="ph ph-upload-simple"></i> Submit Your Project';
     }
 }

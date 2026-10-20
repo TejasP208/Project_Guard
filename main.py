@@ -33,7 +33,7 @@ from clerk_auth import require_clerk_user_id, validate_production_clerk_config
 from mentor_roster import mentor_key, parse_mentor_roster
 from team_sheet_import import TeamSheetError, parse_team_sheet, replace_team_sheet
 from enrollment import redeem_student, redeem_mentor
-from models import ApiRateLimitBucket, AxiomMessage, Base, EnrollmentCode, Mentor, MentorReview, MentorStudent, Project, ProjectDocument, ProjectDocumentChunk, TopicChangeRequest, Student, Team, TeamInvitation, TeamMember
+from models import ApiRateLimitBucket, AxiomMessage, Base, EnrollmentCode, Mentor, MentorReview, MentorStudent, Project, ProjectDocument, ProjectDocumentChunk, SubmissionCheck, TopicChangeRequest, Student, Team, TeamInvitation, TeamMember
 from enrollment import code_hash
 import secrets
 from group_connect import create_router
@@ -48,7 +48,6 @@ from project_rag import index_document, index_missing_for_team, retrieve_team_pa
 async def lifespan(_app: FastAPI):
     validate_production_clerk_config()
     _trusted_proxy_networks()
-    _originality_block_threshold()
     # Fail startup with a clear error if the hosting build skipped NLTK data.
     from nlp.preprocessor import preprocess
     if not preprocess("Students are building projects"):
@@ -84,18 +83,9 @@ _plagiarism_semaphore = asyncio.Semaphore(1)
 _last_rate_cleanup = 0
 
 
-def _originality_block_threshold() -> float | None:
-    """Return a calibrated hard-block threshold, if one was configured."""
-    raw_threshold = os.getenv("ORIGINALITY_BLOCK_THRESHOLD", "").strip()
-    if not raw_threshold:
-        return None
-    try:
-        threshold = float(raw_threshold)
-    except ValueError as error:
-        raise RuntimeError("ORIGINALITY_BLOCK_THRESHOLD must be a number from 0 to 100.") from error
-    if not math.isfinite(threshold) or not 0 <= threshold <= 100:
-        raise RuntimeError("ORIGINALITY_BLOCK_THRESHOLD must be a number from 0 to 100.")
-    return threshold
+def _originality_block_threshold() -> float:
+    """The submission policy accepts similarity scores up to and including 50%."""
+    return 50.0
 
 
 @asynccontextmanager
@@ -578,7 +568,7 @@ app.add_middleware(
 # Pydantic Models
 class ProjectSubmission(StrictRequest):
     project_name: str = Field(min_length=1, max_length=200)
-    project_abstract: str = Field(default="", max_length=10000)
+    project_abstract: str = Field(min_length=1, max_length=10000)
 
 class CreateTeamRequest(StrictRequest):
     team_name: str = Field(min_length=1, max_length=100)
@@ -1089,55 +1079,53 @@ def leave_team(request: Request):
 
 @app.post("/submit-project")
 async def submit_project(data: ProjectSubmission, request: Request, background_tasks: BackgroundTasks):
-    return await _submit_project_checked(data, request, background_tasks=background_tasks)
+    require_profile_role(request, "student")
+    raise HTTPException(422, "A project document and successful similarity check are required. Use the file submission form.")
 
 
-async def _submit_project_checked(data: ProjectSubmission, request: Request, document_data=None,
-                                  background_tasks: BackgroundTasks | None = None):
-    roll_no = require_profile_role(request, "student")["identifier"]
-    title = data.project_name.strip()
-    if not title:
-        raise HTTPException(status_code=422, detail="Project title is required.")
-    existing_id = await run_in_threadpool(_current_project_id_for_student, roll_no)
-    try:
-        async with plagiarism_slot():
-            result = await run_plagiarism_check_with_deadline(title, data.project_abstract.strip(), b"", "", existing_id)
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error("Submission plagiarism check failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=503, detail="The submission could not be checked right now. Please try again.") from error
+def _submission_payload_hash(title: str, abstract: str, filename: str, content: bytes) -> str:
+    details = json.dumps([title.strip(), abstract.strip(), Path(filename).suffix.lower(), hashlib.sha256(content).hexdigest()],
+                         ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(details.encode("utf-8")).hexdigest()
+
+
+def _valid_similarity_score(result: dict) -> float:
     score = result.get("plagiarism_percent")
     if ("error" in result or isinstance(score, bool) or not isinstance(score, (int, float))
             or not math.isfinite(score) or not 0 <= score <= 100):
-        raise HTTPException(status_code=503, detail="The submission check did not return a valid score. Please try again.")
-    block_threshold = _originality_block_threshold()
-    if block_threshold is not None and score > block_threshold:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Submission blocked: similarity score {score}% exceeds the "
-                f"configured {block_threshold:g}% limit. Revise the title and abstract, then check again."
-            ),
-        )
-    result = await run_in_threadpool(_save_project_submission, data, request, document_data)
+        raise HTTPException(503, "The similarity check did not return a valid score. Please try again.")
+    return float(score)
+
+
+async def _submit_project_checked(data: ProjectSubmission, request: Request, document_data=None,
+                                  check_token: str = "",
+                                  background_tasks: BackgroundTasks | None = None):
+    require_profile_role(request, "student")
+    title = data.project_name.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Project title is required.")
+    if not data.project_abstract.strip() or document_data is None:
+        raise HTTPException(422, "A project abstract and document are required.")
+    if not check_token:
+        raise HTTPException(422, "Check similarity before submitting the project.")
+    result = await run_in_threadpool(_save_project_submission, data, request, document_data, check_token)
     indexing = result.pop("_index_document", None)
     if indexing and background_tasks is not None:
         background_tasks.add_task(index_document, indexing[0], indexing[1], SessionLocal, CloudflareEmbeddingClient)
     return result
 
 
-def _current_project_id_for_student(roll_no: str) -> int | None:
+def _submission_context_for_student(roll_no: str) -> tuple[int, int | None]:
     with SessionLocal() as db:
         member = db.query(TeamMember).filter(func.lower(TeamMember.roll_no) == roll_no.strip().lower()).first()
         if not member:
             raise HTTPException(status_code=400, detail="You must join a team to submit a project")
         if db.query(TeamMember).filter(TeamMember.team_id == member.team_id).count() < 2:
             raise HTTPException(status_code=400, detail="At least two students must be in the team before submitting a project idea.")
-        return db.query(Project.id).filter(Project.team_id == member.team_id).scalar()
+        return member.team_id, db.query(Project.id).filter(Project.team_id == member.team_id).scalar()
 
 
-def _save_project_submission(data: ProjectSubmission, request: Request, document_data=None):
+def _save_project_submission(data: ProjectSubmission, request: Request, document_data=None, check_token: str = ""):
     roll_no = require_profile_role(request, "student")["identifier"]
     with SessionLocal() as db:
         try:
@@ -1154,6 +1142,20 @@ def _save_project_submission(data: ProjectSubmission, request: Request, document
             member_count = db.query(TeamMember).filter(TeamMember.team_id == team.id).count()
             if member_count < 2:
                 raise HTTPException(status_code=400, detail="At least two students must be in the team before submitting a project idea.")
+
+            filename, content, extracted = document_data
+            receipt = db.query(SubmissionCheck).filter_by(
+                token_hash=hashlib.sha256(check_token.encode("utf-8")).hexdigest()
+            ).with_for_update().first()
+            expected_hash = _submission_payload_hash(data.project_name, data.project_abstract, filename, content)
+            if (receipt is None or receipt.used_at is not None or receipt.expires_at < int(time.time())
+                    or receipt.student_roll_no.lower() != roll_no.strip().lower()
+                    or receipt.team_id != team.id or not hmac.compare_digest(receipt.payload_hash, expected_hash)):
+                raise HTTPException(422, "The project changed or its similarity check expired. Check similarity again before submitting.")
+            threshold = _originality_block_threshold()
+            if receipt.similarity_percent > threshold:
+                raise HTTPException(422, f"Similarity score {receipt.similarity_percent:g}% exceeds the {threshold:g}% limit.")
+            receipt.used_at = int(time.time())
 
             student = db.query(Student).filter(func.lower(Student.roll_no) == roll_no.strip().lower()).first()
             if not student:
@@ -1288,19 +1290,22 @@ def _store_team_document(db, team: Team, slot: str, filename: str, content: byte
 
 @app.post("/submit-project-with-file")
 async def submit_project_with_file(request: Request, background_tasks: BackgroundTasks, project_name: Annotated[str, Form()],
-                                   project_abstract: Annotated[str, Form()] = "",
-                                   file: Annotated[UploadFile | None, File()] = None):
-    roll_no = require_profile_role(request, "student")["identifier"]
-    content = await file.read(20 * 1024 * 1024 + 1) if file else None
-    if content is not None and len(content) > 20 * 1024 * 1024:
+                                   project_abstract: Annotated[str, Form()],
+                                   file: Annotated[UploadFile, File()],
+                                   check_token: Annotated[str, Form()]):
+    require_profile_role(request, "student")
+    if not project_name.strip() or not project_abstract.strip():
+        raise HTTPException(422, "Project title and abstract are required.")
+    content = await file.read(20 * 1024 * 1024 + 1)
+    if len(content) > 20 * 1024 * 1024:
         raise HTTPException(413, "The document must be 20 MB or smaller.")
     try:
-        extracted = extract_project_document(content, file.filename or "") if content is not None else None
+        extracted = extract_project_document(content, file.filename or "")
     except (DocumentValidationError, DocumentExtractionError, DocumentLimitError) as error:
         raise HTTPException(422, str(error)) from error
     return await _submit_project_checked(
         ProjectSubmission(project_name=project_name, project_abstract=project_abstract), request,
-        (file.filename or "idea.txt", content, extracted) if content is not None else None,
+        (file.filename or "", content, extracted), check_token=check_token,
         background_tasks=background_tasks)
 
 
@@ -1450,32 +1455,48 @@ def decide_topic_change(change_id: int, decision: str, request: Request):
 @app.post("/check-plagiarism")
 async def check_plagiarism(
     request: Request,
-    file: Annotated[UploadFile | None, File()] = None,
-    title: Annotated[str, Form(max_length=500)] = "",
-    description: Annotated[str, Form(max_length=10000)] = "",
+    file: Annotated[UploadFile, File()],
+    title: Annotated[str, Form(max_length=200)],
+    description: Annotated[str, Form(max_length=10000)],
 ):
-    require_profile_role(request, "student")
+    roll_no = require_profile_role(request, "student")["identifier"]
+    title, description = title.strip(), description.strip()
+    if not title or not description:
+        raise HTTPException(422, "Project title and abstract are required before checking similarity.")
+    team_id, existing_id = await run_in_threadpool(_submission_context_for_student, roll_no)
     try:
         async with plagiarism_slot():
-            file_bytes = await file.read(MAX_PLAGIARISM_UPLOAD_BYTES + 1) if file else b""
+            file_bytes = await file.read(MAX_PLAGIARISM_UPLOAD_BYTES + 1)
             if len(file_bytes) > MAX_PLAGIARISM_UPLOAD_BYTES:
                 raise HTTPException(status_code=413, detail="The uploaded file must be 20 MB or smaller.")
-            filename = (file.filename or "") if file else ""
+            filename = file.filename or ""
+            extract_project_document(file_bytes, filename)
             result = await run_plagiarism_check_with_deadline(
-                title, description, file_bytes, filename
+                title, description, file_bytes, filename, existing_id
             )
             if "error" in result:
                 raise HTTPException(status_code=400, detail=result["error"])
-            if request.state.profile["role"] == "student":
-                # Students need the score to decide whether to revise; matching
-                # project titles and team metadata expose other students' work.
-                result = {
-                    key: result[key]
-                    for key in ("plagiarism_percent", "risk_level", "document_text_truncated", "document_text_used_characters")
-                    if key in result
-                }
-                result["submission_block_threshold"] = _originality_block_threshold()
-            return result
+            score = _valid_similarity_score(result)
+            threshold = _originality_block_threshold()
+            # Matching project titles and team details are private to their owners.
+            summary = {key: result[key] for key in (
+                "plagiarism_percent", "risk_level", "document_text_truncated", "document_text_used_characters", "comparison_count"
+            ) if key in result}
+            summary["submission_block_threshold"] = threshold
+            summary["can_submit"] = score <= threshold
+            if score <= threshold:
+                token = secrets.token_urlsafe(32)
+                with SessionLocal() as db:
+                    db.query(SubmissionCheck).filter(SubmissionCheck.expires_at < int(time.time())).delete()
+                    db.add(SubmissionCheck(
+                        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                        student_roll_no=roll_no, team_id=team_id,
+                        payload_hash=_submission_payload_hash(title, description, filename, file_bytes),
+                        similarity_percent=score, expires_at=int(time.time()) + 900,
+                    ))
+                    db.commit()
+                summary["check_token"] = token
+            return summary
     except HTTPException:
         raise
     except DocumentValidationError as e:

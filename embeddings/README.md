@@ -38,22 +38,21 @@ all 72 project records (checked 2026-10-06). For plagiarism checks, the
 title/description and document text are embedded separately, and the strongest
 chunk match is used for each stored project. Documents support chunks of up to
 3000 characters with a 200-character overlap, preferring sentence boundaries
-and then word boundaries. The checker currently truncates extracted document
-text to its first 500 normalized characters before chunking, so longer uploads
-are not fully covered yet. `embed_many(texts)` batches up to eight texts per
+and then word boundaries. The checker uses the full extracted document up to
+the accepted 10,000-character limit. `embed_many(texts)` batches up to eight texts per
 Cloudflare request and returns one vector for each input in order.
 
-The combined TF-IDF/Qwen score (60%/40%) is provisional. No hard submission
-cutoff is active by default: the old 30% cutoff was not supported by labeled
-cases and could reject legitimate work. `/check-plagiarism` reports the score
-as advisory. After collecting representative labeled cases, run
+The combined TF-IDF/Qwen score (60%/40%) is provisional. Project submission
+currently requires an abstract, document, and prior similarity check of the
+same content. The submission limit is 50%; scores above 50% are
+blocked. The percentage estimates similarity to stored projects and is not
+proof of plagiarism. To evaluate the cutoff, collect representative labeled cases and run
 `python -m embeddings.calibrate path/to/labeled_cases.csv`; it requires at
 least 10 similar and 10 unrelated examples and evaluates the current configured
 weights and candidate cutoffs. Treat that result as exploratory, review errors
 on separate held-out cases, and document the chosen weights and cutoff before
-setting `ORIGINALITY_BLOCK_THRESHOLD` (a number from 0 to 100) in the backend
-environment. The script does not optimize weights, so the weights still need
-separate evidence and review before enabling a hard block.
+changing the 50% submission policy. The script does not optimize weights, so the weights and cutoff
+still need separate evidence and review.
 
 To try it manually after adding the two values to `.env`:
 

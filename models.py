@@ -32,6 +32,18 @@ class AxiomMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
 
+
+class SubmissionCheck(Base):
+    __tablename__ = "submission_checks"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_roll_no: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    similarity_percent: Mapped[float] = mapped_column(nullable=False)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    used_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
 class Student(Base):
     __tablename__ = "students"
 

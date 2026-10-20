@@ -64,6 +64,15 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return response.json()
 
+    def checked_submission(self, user, title, abstract):
+        files = {"file": ("idea.txt", b"Detailed project idea document.", "text/plain")}
+        checked = self.call("POST", "/check-plagiarism", role="student", user=user,
+                            data={"title": title, "description": abstract}, files=files)
+        self.assertEqual(checked.status_code, 200, checked.text)
+        return self.call("POST", "/submit-project-with-file", role="student", user=user,
+                         data={"project_name": title, "project_abstract": abstract,
+                               "check_token": checked.json()["check_token"]}, files=files)
+
     def test_project_directory_includes_all_teams_for_mentor(self):
         with self.sessions() as db:
             db.add_all([
@@ -293,12 +302,14 @@ class MentorRosterTests(unittest.TestCase):
         created = self.call("POST", "/create-team", role="student", user="S1", json={"team_name": "Pair"})
         self.assertEqual(created.status_code, 200)
         idea = {"project_name": "Original idea", "project_abstract": "Our approach"}
-        self.assertEqual(self.call("POST", "/submit-project", role="student", user="S1", json=idea).status_code, 400)
+        self.assertEqual(self.call("POST", "/check-plagiarism", role="student", user="S1",
+                                   data={"title": idea["project_name"], "description": idea["project_abstract"]},
+                                   files={"file": ("idea.txt", b"Document", "text/plain")}).status_code, 400)
 
         joined = self.call("POST", "/join-team", role="student", user="S2", json={"team_code": created.json()["team_code"]})
         self.assertEqual(joined.status_code, 200)
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})):
-            submitted = self.call("POST", "/submit-project", role="student", user="S1", json=idea)
+            submitted = self.checked_submission("S1", idea["project_name"], idea["project_abstract"])
         self.assertEqual(submitted.status_code, 200)
         project_id = submitted.json()["project_id"]
         url = f"/api/projects/{project_id}/assign"
@@ -308,7 +319,7 @@ class MentorRosterTests(unittest.TestCase):
         self.assertEqual(self.call("PATCH", url, user="Dr Shah").status_code, 409)
         self.assertEqual(self.call("GET", "/api/projects", user="Dr Shah").json(), [])
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})) as check:
-            updated = self.call("POST", "/submit-project", role="student", user="S2", json={**idea, "project_name": "Refined idea"})
+            updated = self.checked_submission("S2", "Refined idea", idea["project_abstract"])
         self.assertEqual(check.await_args.args[-1], project_id)
         self.assertEqual(updated.status_code, 409)
         change = self.call("POST", "/student/topic-change-requests", role="student", user="S2",
@@ -317,7 +328,7 @@ class MentorRosterTests(unittest.TestCase):
         approved = self.call("PATCH", f"/mentor/topic-change-requests/{change.json()['id']}/accepted")
         self.assertEqual(approved.status_code, 200)
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 10})):
-            updated = self.call("POST", "/submit-project", role="student", user="S2", json={**idea, "project_name": "Refined idea"})
+            updated = self.checked_submission("S2", "Refined idea", idea["project_abstract"])
         self.assertEqual(updated.json()["project_id"], project_id)
         imported = self.upload([["Student Name", "PRN", "Project"], ["One", "S1", "Stale title"], ["Two", "S2", "Stale title"]])
         self.assertEqual(imported.status_code, 200)
@@ -326,7 +337,9 @@ class MentorRosterTests(unittest.TestCase):
             self.assertEqual(db.get(Project, project_id).assigned_mentor_id, 1)
             self.assertEqual(db.get(Project, project_id).group_no, 1)
         self.assertEqual(self.call("POST", "/leave-team", role="student", user="S2").status_code, 200)
-        self.assertEqual(self.call("POST", "/submit-project", role="student", user="S1", json=idea).status_code, 400)
+        self.assertEqual(self.call("POST", "/check-plagiarism", role="student", user="S1",
+                                   data={"title": idea["project_name"], "description": idea["project_abstract"]},
+                                   files={"file": ("idea.txt", b"Document", "text/plain")}).status_code, 400)
 
     def test_group_numbers_follow_mentor_selection_order_across_mentors(self):
         with self.sessions() as db:

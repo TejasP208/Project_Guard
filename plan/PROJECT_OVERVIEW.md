@@ -303,14 +303,14 @@ sequenceDiagram
 
 ### 7.1 Plagiarism Detection
 
-- **Trigger:** Student clicks "Check Plagiarism" or submits a project.
+- **Trigger:** Student clicks "Check Plagiarism" before submitting a project.
 - **Pipeline:**
   1. File uploaded → text extracted by `nlp/extractor.py` (PyMuPDF / python-docx).
   2. Text chunked and preprocessed (NLTK stop-word removal, tokenization).
   3. A subprocess worker (`nlp/plagiarism_worker.py`) is spawned to isolate CPU work; killed after 90-second timeout.
   4. The project's embedding (Cloudflare Qwen3, 1024-dim) is compared against all existing project embeddings in PostgreSQL via cosine similarity.
   5. An `originality_score` (0–100 %) is returned and displayed as a color-coded chip.
-- **Hard-block threshold:** If `ORIGINALITY_BLOCK_THRESHOLD` env var is set, submissions above the threshold are rejected.
+- **Hard-block threshold:** Scores above 50% are blocked by default. The prior check is tied to the submitted title, abstract, and document.
 - **Concurrency guard:** A PostgreSQL advisory lock ensures only one check runs at a time across all workers.
 
 ### 7.2 Axiom AI — Student Chatbot (`/chat-stream`)
@@ -452,8 +452,8 @@ Rate counters are stored in PostgreSQL (`api_rate_limit_buckets`) and are shared
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/submit-project` | Submit project idea (title + abstract + optional file) |
-| `POST` | `/check-plagiarism` | Run plagiarism check without submitting |
+| `POST` | `/submit-project-with-file` | Submit checked project title, abstract, document, and check token |
+| `POST` | `/check-plagiarism` | Check required title, abstract, and document before submission |
 | `POST` | `/project-progress` | Upload review document for a specific slot |
 | `POST` | `/topic-change-request` | Request a project topic change |
 
@@ -521,7 +521,6 @@ Rate counters are stored in PostgreSQL (`api_rate_limit_buckets`) and are shared
 | `ENROLLMENT_ADMIN_CLERK_USER_IDS` | ✅ prod | Comma-separated Clerk user IDs allowed to access admin portal |
 | `RATE_LIMIT_HASH_KEY` | ✅ prod | Independent secret ≥ 32 chars for HMAC rate-limit keys |
 | `TRUSTED_PROXY_IPS` | ✅ prod | CIDR ranges of the reverse proxy |
-| `ORIGINALITY_BLOCK_THRESHOLD` | optional | Plagiarism score 0–100 above which submissions are blocked |
 | `APP_ENV` | optional | Set to `production` to enable all prod checks |
 
 ---

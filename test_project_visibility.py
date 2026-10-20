@@ -68,6 +68,15 @@ class ProjectVisibilityTests(unittest.TestCase):
     def headers(self, subject="mentor:mentor1"):
         return {"x-test-subject": subject}
 
+    def checked_submission(self, subject, title, abstract):
+        files = {"file": ("idea.txt", b"Detailed project idea document.", "text/plain")}
+        checked = self.client.post("/check-plagiarism", headers=self.headers(subject),
+                                   data={"title": title, "description": abstract}, files=files)
+        self.assertEqual(checked.status_code, 200, checked.text)
+        return self.client.post("/submit-project-with-file", headers=self.headers(subject),
+                                data={"project_name": title, "project_abstract": abstract,
+                                      "check_token": checked.json()["check_token"]}, files=files)
+
     def test_project_list_excludes_legacy_orphans_and_other_assignments(self):
         response = self.client.get("/api/projects", headers=self.headers())
         self.assertEqual(response.status_code, 200)
@@ -238,17 +247,24 @@ class ProjectVisibilityTests(unittest.TestCase):
 
     def test_legacy_team_label_does_not_block_new_student_submission(self):
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})) as check:
-            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Fresh idea", "project_abstract": "Our own work"})
+            response = self.checked_submission("student:S1", "Fresh idea", "Our own work")
         self.assertEqual(response.status_code, 200)
-        check.assert_awaited_once_with("Fresh idea", "Our own work", b"", "", None)
+        check.assert_awaited_once_with("Fresh idea", "Our own work", b"Detailed project idea document.", "idea.txt", None)
         with self.sessions() as db:
             self.assertIsNone(db.get(Project, 7).team_id)
             self.assertEqual(db.query(Project).filter(Project.team_id == 4).one().project_name, "Fresh idea")
 
-    def test_direct_submission_is_blocked_when_similarity_is_high(self):
-        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 45})):
-            response = self.client.post("/submit-project", headers=self.headers("student:S1"), json={"project_name": "Copied idea", "project_abstract": "Copied abstract"})
+    def test_direct_submission_and_high_similarity_are_blocked(self):
+        response = self.client.post("/submit-project", headers=self.headers("student:S1"),
+                                    json={"project_name": "Copied idea", "project_abstract": "Copied abstract"})
         self.assertEqual(response.status_code, 422)
+        with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 51})):
+            checked = self.client.post("/check-plagiarism", headers=self.headers("student:S1"),
+                                       data={"title": "Copied idea", "description": "Copied abstract"},
+                                       files={"file": ("idea.txt", b"Copied project details", "text/plain")})
+        self.assertEqual(checked.status_code, 200)
+        self.assertFalse(checked.json()["can_submit"])
+        self.assertNotIn("check_token", checked.json())
         with self.sessions() as db:
             self.assertIsNone(db.query(Project).filter(Project.team_id == 4).first())
 
@@ -276,9 +292,7 @@ class ProjectVisibilityTests(unittest.TestCase):
             self.assertEqual(db.query(MentorStudent).count(), 0)
 
         with patch.object(main, "run_plagiarism_check_with_deadline", AsyncMock(return_value={"plagiarism_percent": 12})):
-            resubmitted = self.client.post("/submit-project", headers=self.headers("student:S3"), json={
-                "project_name": "Revised idea", "project_abstract": "Revised abstract"
-            })
+            resubmitted = self.checked_submission("student:S3", "Revised idea", "Revised abstract")
         self.assertEqual(resubmitted.status_code, 200)
         with self.sessions() as db:
             project = db.get(Project, 3)
@@ -305,10 +319,17 @@ class ProjectVisibilityTests(unittest.TestCase):
             "top_3_matches": [{"project_id": 5}], "document_text_truncated": True,
         })
         with patch.object(main, "run_plagiarism_check_with_deadline", check):
-            response = self.client.post("/check-plagiarism", headers=self.headers("student:S1"), data={"title": "Idea"})
+            response = self.client.post("/check-plagiarism", headers=self.headers("student:S1"),
+                                        data={"title": "Idea", "description": "Abstract"},
+                                        files={"file": ("idea.txt", b"Project details", "text/plain")})
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json(), {"plagiarism_percent": 12, "risk_level": "Low", "document_text_truncated": True})
-            self.assertEqual(self.client.post("/check-plagiarism", headers=self.headers()).status_code, 403)
+            self.assertEqual({key: response.json()[key] for key in ("plagiarism_percent", "risk_level", "document_text_truncated", "submission_block_threshold", "can_submit")},
+                             {"plagiarism_percent": 12, "risk_level": "Low", "document_text_truncated": True,
+                              "submission_block_threshold": 50, "can_submit": True})
+            self.assertIn("check_token", response.json())
+            self.assertEqual(self.client.post("/check-plagiarism", headers=self.headers(),
+                                              data={"title": "Idea", "description": "Abstract"},
+                                              files={"file": ("idea.txt", b"Project details", "text/plain")}).status_code, 403)
 
     def test_stale_roster_does_not_leak_project_through_lists_or_dashboard(self):
         with self.sessions() as db:

@@ -231,13 +231,13 @@
 
                             <div class="form-group">
                                 <label for="project-desc">Project Abstract</label>
-                                <textarea id="project-desc" rows="4"
+                                <textarea id="project-desc" rows="4" required maxlength="10000"
                                     placeholder="Briefly describe the objective and methodology of your project..."></textarea>
                             </div>
 
                             <!-- Drag & Drop Area -->
                             <div class="form-group">
-                                <label>Upload Project File (Optional)</label>
+                                <label>Upload Project File (Required)</label>
                                 <div class="drop-zone" id="drop-zone">
                                     <div class="drop-zone-content">
                                         <div class="upload-icon-wrapper">
@@ -245,7 +245,7 @@
                                         </div>
                                         <h3>Drag & Drop your files here</h3>
                                         <p>or click to browse</p>
-                                        <span class="file-formats">PDF, DOCX, TXT · Max 20 MB · Extracted text: max 10,000 characters / 2,000 lines; first 500 characters are checked</span>
+                                        <span class="file-formats">PDF, DOCX, TXT · Max 20 MB · Extracted text: max 10,000 characters / 2,000 lines; the full extracted text is checked</span>
                                     </div>
                                     <input type="file" id="file-input" hidden accept=".pdf,.docx,.txt">
                                 </div>
@@ -286,7 +286,7 @@
                                     </div>
                                     <div class="status-item score-container" id="score-container"
                                         style="display: none;">
-                                        <span class="status-label">Plagiarism Score</span>
+                                        <span class="status-label">Similarity Score</span>
                                         <div class="score-indicator" id="score-value">
                                             <span class="score-number safe">12%</span>
                                             <span class="chip similarity safe">Low Similarity</span>
@@ -301,7 +301,7 @@
                                     <i class="ph-fill ph-shield-check"></i>
                                     Check Plagiarism
                                 </button>
-                                <button onclick="submitProject()" type="submit" class="btn btn-primary" id="btn-submit">
+                                <button onclick="submitProject()" type="submit" class="btn btn-primary" id="btn-submit" disabled>
                                     <i class="ph ph-upload-simple"></i>
                                     Submit Your Project
                                 </button>
@@ -642,7 +642,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=axiom-history-1"></script>
+    <script src="script.js?v=similarity-check-1"></script>
     <script src="account-actions.js?v=account-actions-2"></script>
     <script src="group_connect.js?v=team-membership-1"></script>
     <script src="axiom_dashboard.js?v=3"></script>

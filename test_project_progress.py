@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import main
-from models import Base, Mentor, MentorReview, Project, ProjectDocument, Student, Team, TeamMember
+from models import Base, Mentor, MentorReview, Project, ProjectDocument, Student, SubmissionCheck, Team, TeamMember
 
 
 class ProjectProgressTests(unittest.TestCase):
@@ -50,9 +50,16 @@ class ProjectProgressTests(unittest.TestCase):
     def call(self, method, path, identity="student:S1", **kwargs):
         return self.client.request(method, path, headers={"x-test-subject": identity}, **kwargs)
 
+    def checked_submission(self, title, abstract, content=b"Garden AI uses images to identify plants."):
+        document = {"file": ("idea.txt", content, "text/plain")}
+        checked = self.call("POST", "/check-plagiarism", data={"title": title, "description": abstract}, files=document)
+        self.assertEqual(checked.status_code, 200, checked.text)
+        return self.call("POST", "/submit-project-with-file",
+                         data={"project_name": title, "project_abstract": abstract, "check_token": checked.json()["check_token"]},
+                         files=document)
+
     def test_idea_file_is_retained_and_shared_by_team(self):
-        response = self.call("POST", "/submit-project-with-file", data={"project_name": "Garden AI", "project_abstract": "Identify plants"},
-                             files={"file": ("idea.txt", b"Garden AI uses images to identify plants.", "text/plain")})
+        response = self.checked_submission("Garden AI", "Identify plants")
         self.assertEqual(response.status_code, 200, response.text)
         with self.sessions() as db:
             document = db.query(ProjectDocument).one()
@@ -68,12 +75,56 @@ class ProjectProgressTests(unittest.TestCase):
         self.assertEqual(team["project_abstract"], "Identify plants")
         self.assertEqual({member["roll_no"] for member in team["member_details"]}, {"S1", "S2"})
 
+    def test_check_required_inputs_and_fifty_percent_boundary(self):
+        files = {"file": ("idea.txt", b"Detailed project idea", "text/plain")}
+        self.assertEqual(self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": " "}, files=files).status_code, 422)
+        self.assertEqual(self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}).status_code, 422)
+        self.assertEqual(self.call("POST", "/submit-project-with-file",
+                                   data={"project_name": "Idea", "project_abstract": "Abstract"}, files=files).status_code, 422)
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 50}
+        at_limit = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
+        self.assertEqual(at_limit.status_code, 200)
+        self.assertTrue(at_limit.json()["can_submit"])
+        self.assertIn("check_token", at_limit.json())
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 50.01}
+        above_limit = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
+        self.assertFalse(above_limit.json()["can_submit"])
+        self.assertNotIn("check_token", above_limit.json())
+
+    def test_check_is_bound_to_student_content_and_one_submission(self):
+        files = {"file": ("idea.txt", b"Detailed project idea", "text/plain")}
+        checked = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
+        token = checked.json()["check_token"]
+        data = {"project_name": "Idea", "project_abstract": "Abstract", "check_token": token}
+        self.assertEqual(self.call("POST", "/submit-project-with-file", identity="student:S2", data=data, files=files).status_code, 422)
+        self.assertEqual(self.call("POST", "/submit-project-with-file", data={**data, "project_abstract": "Changed"}, files=files).status_code, 422)
+        self.assertEqual(self.call("POST", "/submit-project-with-file", data=data,
+                                   files={"file": ("idea.txt", b"Changed document", "text/plain")}).status_code, 422)
+        self.assertEqual(self.call("POST", "/submit-project-with-file", data=data, files=files).status_code, 200)
+        self.assertEqual(self.call("POST", "/submit-project-with-file", data=data, files=files).status_code, 422)
+
+    def test_expired_and_invalid_scores_do_not_allow_submission(self):
+        files = {"file": ("idea.txt", b"Detailed project idea", "text/plain")}
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": float("nan")}
+        invalid = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
+        self.assertEqual(invalid.status_code, 503)
+        main.run_plagiarism_check_with_deadline.return_value = {"plagiarism_percent": 10}
+        checked = self.call("POST", "/check-plagiarism", data={"title": "Idea", "description": "Abstract"}, files=files)
+        with self.sessions() as db:
+            receipt = db.query(SubmissionCheck).one()
+            receipt.expires_at = 0
+            db.commit()
+        self.assertEqual(self.call("POST", "/submit-project-with-file",
+                                   data={"project_name": "Idea", "project_abstract": "Abstract",
+                                         "check_token": checked.json()["check_token"]}, files=files).status_code, 422)
+
     def test_review_and_topic_decisions_require_assigned_mentor(self):
         with self.sessions() as db:
             db.add(Project(team_id=1, project_name="Old", assigned_mentor_id=1, submission_status="accepted"))
             db.commit()
         bypass = self.call("POST", "/submit-project", json={"project_name": "New", "project_abstract": "New abstract"})
-        self.assertEqual(bypass.status_code, 409)
+        self.assertEqual(bypass.status_code, 422)
+        self.assertEqual(self.checked_submission("New", "New abstract").status_code, 409)
         upload_request = lambda slot: self.call("POST", f"/student/project-documents/{slot}",
                                                 files={"file": ("review.txt", b"Our first review notes.", "text/plain")})
         self.assertIsNone(self.call("GET", "/student/project-progress").json()["active_review"])

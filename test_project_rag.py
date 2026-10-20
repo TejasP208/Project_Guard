@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import Base, ProjectDocument, ProjectDocumentChunk, Team
+from embeddings.chunking import text_for_document_scoring
 from project_rag import index_document, split_document
 
 
@@ -50,6 +51,12 @@ class ProjectRagTests(unittest.TestCase):
         self.assertGreater(len(chunks), 1)
         self.assertTrue(all(len(chunk) <= 2400 for chunk in chunks))
         self.assertIn("A paragraph", chunks[0])
+
+    def test_similarity_scoring_uses_entire_accepted_document(self):
+        text = "A" * 6000
+        scored, truncated = text_for_document_scoring(text)
+        self.assertEqual(scored, text)
+        self.assertFalse(truncated)
 
 
 if __name__ == "__main__":
